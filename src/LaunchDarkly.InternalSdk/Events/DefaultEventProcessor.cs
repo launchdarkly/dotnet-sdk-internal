@@ -1,12 +1,9 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Net.Http;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Common.Logging;
+using LaunchDarkly.Logging;
 using LaunchDarkly.Sdk.Interfaces;
 using LaunchDarkly.Sdk.Internal.Helpers;
 
@@ -14,7 +11,6 @@ namespace LaunchDarkly.Sdk.Internal.Events
 {
     public sealed class DefaultEventProcessor : IEventProcessor
     {
-        internal static readonly ILog Log = LogManager.GetLogger(typeof(DefaultEventProcessor));
         internal static readonly string CurrentSchemaVersion = "3";
 
         private readonly BlockingCollection<IEventMessage> _messageQueue;
@@ -24,6 +20,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         private readonly Timer _flushUsersTimer;
         private readonly TimeSpan _diagnosticRecordingInterval;
         private readonly Object _diagnosticTimerLock = new Object();
+        private readonly Logger _logger;
         private Timer _diagnosticTimer;
         private AtomicBoolean _stopped;
         private AtomicBoolean _offline;
@@ -35,14 +32,16 @@ namespace LaunchDarkly.Sdk.Internal.Events
             IUserDeduplicator userDeduplicator,
             IDiagnosticStore diagnosticStore,
             IDiagnosticDisabler diagnosticDisabler,
+            Logger logger,
             Action testActionOnDiagnosticSend)
         {
+            _logger = logger;
             _stopped = new AtomicBoolean(false);
             _offline = new AtomicBoolean(false);
             _sentInitialDiagnostics = new AtomicBoolean(false);
             _inputCapacityExceeded = new AtomicBoolean(false);
             _messageQueue = new BlockingCollection<IEventMessage>(config.EventCapacity);
-            _dispatcher = new EventDispatcher(config, _messageQueue, eventSender, userDeduplicator, diagnosticStore, testActionOnDiagnosticSend);
+            _dispatcher = new EventDispatcher(config, _messageQueue, eventSender, userDeduplicator, diagnosticStore, _logger, testActionOnDiagnosticSend);
             _flushTimer = new Timer(DoBackgroundFlush, null, config.EventFlushInterval,
                 config.EventFlushInterval);
             _diagnosticStore = diagnosticStore;
@@ -70,7 +69,8 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
         private void SetupDiagnosticInit(bool enabled)
         {
-            lock (_diagnosticTimerLock) {
+            lock (_diagnosticTimerLock)
+            {
                 _diagnosticTimer?.Dispose();
                 _diagnosticTimer = null;
                 if (enabled)
@@ -159,7 +159,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                     // seriously backed up with not-yet-processed events. We shouldn't see this.
                     if (!_inputCapacityExceeded.GetAndSet(true))
                     {
-                        Log.Warn("Events are being produced faster than they can be processed");
+                        _logger.Warn("Events are being produced faster than they can be processed");
                     }
                 }
             }
@@ -272,6 +272,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         private readonly CountdownEvent _flushWorkersCounter;
         private readonly Action _testActionOnDiagnosticSend;
         private readonly IEventSender _eventSender;
+        private readonly Logger _logger;
         private readonly Random _random;
         private long _lastKnownPastTime;
         private volatile bool _disabled;
@@ -281,6 +282,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             IEventSender eventSender,
             IUserDeduplicator userDeduplicator,
             IDiagnosticStore diagnosticStore,
+            Logger logger,
             Action testActionOnDiagnosticSend)
         {
             _config = config;
@@ -289,9 +291,10 @@ namespace LaunchDarkly.Sdk.Internal.Events
             _testActionOnDiagnosticSend = testActionOnDiagnosticSend;
             _flushWorkersCounter = new CountdownEvent(1);
             _eventSender = eventSender;
+            _logger = logger;
             _random = new Random();
-            
-            EventBuffer buffer = new EventBuffer(config.EventCapacity, _diagnosticStore);
+
+            EventBuffer buffer = new EventBuffer(config.EventCapacity, _diagnosticStore, _logger);
 
             Task.Run(() => RunMainLoop(messageQueue, buffer));
         }
@@ -348,8 +351,8 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 }
                 catch (Exception e)
                 {
-                    DefaultEventProcessor.Log.ErrorFormat("Unexpected error in event dispatcher thread: {0}",
-                        e, Util.ExceptionMessage(e));
+                    _logger.Error("Unexpected error in event dispatcher thread: {0}", LogValues.ExceptionSummary(e));
+                    _logger.Debug(LogValues.ExceptionTrace(e));
                 }
             }
         }
@@ -412,11 +415,11 @@ namespace LaunchDarkly.Sdk.Internal.Events
                     }
                     else if (!(e is IdentifyEvent))
                     {
-                       _diagnosticStore?.IncrementDeduplicatedUsers();
+                        _diagnosticStore?.IncrementDeduplicatedUsers();
                     }
                 }
             }
-            
+
             if (willAddFullEvent)
             {
                 buffer.AddEvent(e);
@@ -440,7 +443,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             }
             return false;
         }
-        
+
         private bool ShouldTrackFullEvent(Event e)
         {
             if (e is FeatureRequestEvent fe)
@@ -518,8 +521,8 @@ namespace LaunchDarkly.Sdk.Internal.Events
             }
             catch (Exception e)
             {
-                DefaultEventProcessor.Log.ErrorFormat("Error preparing events, will not send: {0}",
-                    e, Util.ExceptionMessage(e));
+                _logger.Error("Error preparing events, will not send: {0}", LogValues.ExceptionSummary(e));
+                _logger.Debug(LogValues.ExceptionTrace(e));
                 return;
             }
 
@@ -555,14 +558,16 @@ namespace LaunchDarkly.Sdk.Internal.Events
         private readonly EventSummarizer _summarizer;
         private readonly IDiagnosticStore _diagnosticStore;
         private readonly int _capacity;
+        private readonly Logger _logger;
         private bool _exceededCapacity;
 
-        internal EventBuffer(int capacity, IDiagnosticStore diagnosticStore)
+        internal EventBuffer(int capacity, IDiagnosticStore diagnosticStore, Logger logger)
         {
             _capacity = capacity;
             _events = new List<Event>();
             _summarizer = new EventSummarizer();
             _diagnosticStore = diagnosticStore;
+            _logger = logger;
         }
 
         internal void AddEvent(Event e)
@@ -572,7 +577,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 _diagnosticStore?.IncrementDroppedEvents();
                 if (!_exceededCapacity)
                 {
-                    DefaultEventProcessor.Log.Warn("Exceeded event queue capacity. Increase capacity to avoid dropping events.");
+                    _logger.Warn("Exceeded event queue capacity. Increase capacity to avoid dropping events.");
                     _exceededCapacity = true;
                 }
             }

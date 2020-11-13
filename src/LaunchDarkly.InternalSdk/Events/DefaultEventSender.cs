@@ -1,21 +1,16 @@
 using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Common.Logging;
-using LaunchDarkly.Sdk.Interfaces;
+using LaunchDarkly.Logging;
 using LaunchDarkly.Sdk.Internal.Helpers;
 
 namespace LaunchDarkly.Sdk.Internal.Events
 {
     public sealed class DefaultEventSender : IEventSender
     {
-        private static readonly ILog Log = LogManager.GetLogger(typeof(DefaultEventSender));
         private const int MaxAttempts = 2;
         private const string CurrentSchemaVersion = "3";
 
@@ -23,13 +18,15 @@ namespace LaunchDarkly.Sdk.Internal.Events
         private readonly Uri _eventsUri;
         private readonly Uri _diagnosticUri;
         private readonly TimeSpan _timeout;
+        private readonly Logger _logger;
 
-        public DefaultEventSender(HttpClient httpClient, IEventProcessorConfiguration config)
+        public DefaultEventSender(HttpClient httpClient, IEventProcessorConfiguration config, Logger logger)
         {
             _httpClient = httpClient;
             _eventsUri = config.EventsUri;
             _diagnosticUri = config.DiagnosticUri;
             _timeout = config.HttpClientTimeout;
+            _logger = logger;
         }
 
         void IDisposable.Dispose()
@@ -65,7 +62,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 payloadId = Guid.NewGuid().ToString();
             }
 
-            Log.DebugFormat("Submitting {0} to {1} with json: {2}", description, uri.AbsoluteUri, data);
+            _logger.Debug("Submitting {0} to {1} with json: {2}", description, uri.AbsoluteUri, data);
 
             for (var attempt = 0; attempt < MaxAttempts; attempt++)
             {
@@ -90,7 +87,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                             using (var response = await _httpClient.SendAsync(request, cts.Token))
                             {
                                 timer.Stop();
-                                Log.DebugFormat("Event delivery took {0} ms, response status {1}",
+                                _logger.Debug("Event delivery took {0} ms, response status {1}",
                                     timer.ElapsedMilliseconds, (int)response.StatusCode);
                                 if (response.IsSuccessStatusCode)
                                 {
@@ -112,7 +109,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                         if (e.CancellationToken == cts.Token)
                         {
                             // Indicates the task was cancelled deliberately somehow; in this case don't retry
-                            Log.Warn("Event sending task was cancelled");
+                            _logger.Warn("Event sending task was cancelled");
                             return new EventSenderResult(DeliveryStatus.Failed, null);
                         }
                         else
@@ -124,13 +121,13 @@ namespace LaunchDarkly.Sdk.Internal.Events
                     }
                     catch (Exception e)
                     {
-                        errorMessage = string.Format("Error ({0})", Util.DescribeException(e));
+                        errorMessage = string.Format("Error ({0})", LogValues.ExceptionSummary(e));
                         canRetry = true;
                     }
                     string nextStepDesc = canRetry ?
                         (attempt == MaxAttempts - 1 ? "will not retry" : "will retry after one second") :
                         "giving up permanently";
-                    Log.WarnFormat(errorMessage + " sending {0}; {1}", description, nextStepDesc);
+                    _logger.Warn(errorMessage + " sending {0}; {1}", description, nextStepDesc);
                     if (mustShutDown)
                     {
                         return new EventSenderResult(DeliveryStatus.FailedAndMustShutDown, null);

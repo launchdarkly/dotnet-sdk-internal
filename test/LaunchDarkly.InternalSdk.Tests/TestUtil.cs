@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Newtonsoft.Json.Linq;
+using LaunchDarkly.Logging;
 using WireMock.Logging;
 using WireMock.Server;
 using WireMock.Settings;
@@ -11,6 +11,8 @@ namespace LaunchDarkly.Sdk
 {
     public class TestUtil
     {
+        public static Logger NullLogger = Logs.None.Logger("");
+
         public static void AssertJsonEquals(string expected, string actual)
         {
             Assert.Equal(LdValue.Parse(expected), LdValue.Parse(actual));

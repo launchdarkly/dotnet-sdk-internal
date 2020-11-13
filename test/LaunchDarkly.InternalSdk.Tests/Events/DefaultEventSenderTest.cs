@@ -47,7 +47,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 config.DiagnosticUri = new Uri(new Uri(server.Urls[0]), DiagnosticUriPath);
             }
             var httpClient = Util.MakeHttpClient(config, SimpleClientEnvironment.Instance);
-            return new DefaultEventSender(httpClient, config);
+            return new DefaultEventSender(httpClient, config, NullLogger);
         }
 
         [Fact]

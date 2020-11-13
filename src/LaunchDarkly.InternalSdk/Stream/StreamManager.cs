@@ -2,8 +2,8 @@
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using Common.Logging;
 using LaunchDarkly.EventSource;
+using LaunchDarkly.Logging;
 using LaunchDarkly.Sdk.Internal.Events;
 using LaunchDarkly.Sdk.Internal.Helpers;
 
@@ -15,7 +15,6 @@ namespace LaunchDarkly.Sdk.Internal.Stream
     // IStreamProcessor. The IStreamProcessor does not interact with the EventSource API directly.
     public sealed class StreamManager : IDisposable
     {
-        private static readonly ILog Log = LogManager.GetLogger(typeof(StreamManager));
         private const int UNINITIALIZED = 0;
         private const int INITIALIZED = 1;
 
@@ -29,6 +28,7 @@ namespace LaunchDarkly.Sdk.Internal.Stream
         private readonly EventSourceCreator _esCreator;
         private readonly EventSource.ExponentialBackoffWithDecorrelation _backOff;
         private readonly IDiagnosticStore _diagnosticStore;
+        private readonly Logger _logger;
         private IEventSource _es;
         private int _initialized = UNINITIALIZED;
         internal DateTime _esStarted;
@@ -44,10 +44,13 @@ namespace LaunchDarkly.Sdk.Internal.Stream
         /// are in a unit test and want to mock out the event source.</param>
         /// <param name="diagnosticStore">An implementation of IDiagnosticStore. The StreamManager
         /// will call AddStreamInit to record the stream init for diagnostics.</param>
+        /// <param name="logger">A logger instance for messages from StreamManager and EventSource.</param>
         public StreamManager(IStreamProcessor streamProcessor, StreamProperties streamProperties,
             IStreamManagerConfiguration config, ClientEnvironment clientEnvironment,
-            EventSourceCreator eventSourceCreator, IDiagnosticStore diagnosticStore)
+            EventSourceCreator eventSourceCreator, IDiagnosticStore diagnosticStore,
+            Logger logger)
         {
+            _logger = logger;
             _streamProcessor = streamProcessor;
             _streamProperties = streamProperties;
             _config = config;
@@ -73,7 +76,7 @@ namespace LaunchDarkly.Sdk.Internal.Stream
                 if (Interlocked.Exchange(ref _initialized, newState) == UNINITIALIZED && value)
                 {
                     _initTask.SetResult(true);
-                    Log.Info("Initialized LaunchDarkly Stream Processor.");
+                    _logger.Info("Initialized LaunchDarkly Stream Processor.");
                 }
             }
         }
@@ -107,7 +110,7 @@ namespace LaunchDarkly.Sdk.Internal.Stream
             TimeSpan sleepTime = _backOff.GetNextBackOff();
             if (sleepTime != TimeSpan.Zero)
             {
-                Log.InfoFormat("Stopping LaunchDarkly StreamProcessor. Waiting {0} milliseconds before reconnecting...",
+                _logger.Info("Stopping LaunchDarkly StreamProcessor. Waiting {0} milliseconds before reconnecting...",
                     sleepTime.TotalMilliseconds);
             }
             _es.Close();
@@ -117,12 +120,12 @@ namespace LaunchDarkly.Sdk.Internal.Stream
                 _esStarted = DateTime.Now;
                 await _es.StartAsync();
                 _backOff.ResetReconnectAttemptCount();
-                Log.Info("Reconnected to LaunchDarkly StreamProcessor");
+                _logger.Info("Reconnected to LaunchDarkly StreamProcessor");
             }
             catch (Exception exc)
             {
-                Log.ErrorFormat("General Exception: {0}",
-                    exc, Util.ExceptionMessage(exc));
+                _logger.Error("Unexpected error: {0}", LogValues.ExceptionSummary(exc));
+                _logger.Debug(LogValues.ExceptionTrace(exc));
             }
         }
 
@@ -136,7 +139,7 @@ namespace LaunchDarkly.Sdk.Internal.Stream
                 .DelayRetryDuration(_config.ReconnectTime)
                 .ReadTimeout(_config.ReadTimeout)
                 .RequestHeaders(headers)
-                .Logger(LogManager.GetLogger(typeof(EventSource.EventSource)))
+                .Logger(_logger)
                 .Build();
             return new EventSource.EventSource(config);
         }
@@ -149,18 +152,18 @@ namespace LaunchDarkly.Sdk.Internal.Stream
             }
             catch (StreamJsonParsingException ex)
             {
-                Log.DebugFormat("Failed to deserialize JSON in {0} message:\n{1}",
+                _logger.Debug("Failed to deserialize JSON in {0} message:\n{1}",
                     ex, e.EventName, e.Message.Data);
 
-                Log.ErrorFormat("Encountered an error reading feature data: {0}",
-                    ex, Util.ExceptionMessage(ex));
+                _logger.Error("Encountered an error reading feature data: {0}", LogValues.ExceptionSummary(ex));
+                _logger.Debug(LogValues.ExceptionTrace(ex));
 
                 Restart();
             }
             catch (Exception ex)
             {
-                Log.ErrorFormat("Encountered an unexpected error: {0}",
-                    ex, Util.ExceptionMessage(ex));
+                _logger.Error("Unexpected error: {0}", LogValues.ExceptionSummary(ex));
+                _logger.Debug(LogValues.ExceptionTrace(ex));
 
                 Restart();
             }
@@ -176,29 +179,29 @@ namespace LaunchDarkly.Sdk.Internal.Stream
 
         private void OnOpen(object sender, EventSource.StateChangedEventArgs e)
         {
-            Log.Debug("Eventsource Opened");
+            _logger.Debug("Eventsource Opened");
             RecordStreamInit(false);
         }
 
         private void OnClose(object sender, EventSource.StateChangedEventArgs e)
         {
-            Log.Debug("Eventsource Closed");
+            _logger.Debug("Eventsource Closed");
         }
 
         private void OnComment(object sender, EventSource.CommentReceivedEventArgs e)
         {
-            Log.Debug("Received a heartbeat.");
+            _logger.Debug("Received a heartbeat.");
         }
 
         private void OnError(object sender, EventSource.ExceptionEventArgs e)
         {
             var ex = _config.TranslateHttpException(e.Exception);
-            Log.ErrorFormat("Encountered EventSource error: {0}",
-                Util.ExceptionMessage(ex));
+            _logger.Error("Encountered EventSource error: {0}", LogValues.ExceptionSummary(ex));
+            _logger.Debug(LogValues.ExceptionTrace(ex));
             if (ex is EventSource.EventSourceServiceUnsuccessfulResponseException respEx)
             {
                 int status = respEx.StatusCode;
-                Log.Error(Util.HttpErrorMessage(status, "streaming connection", "will retry"));
+                _logger.Error(Util.HttpErrorMessage(status, "streaming connection", "will retry"));
                 RecordStreamInit(true);
                 if (!Util.IsHttpErrorRecoverable(status))
                 {
@@ -218,7 +221,7 @@ namespace LaunchDarkly.Sdk.Internal.Stream
         {
             if (disposing)
             {
-                Log.Info("Stopping LaunchDarkly StreamProcessor");
+                _logger.Info("Stopping LaunchDarkly StreamProcessor");
                 if (_es != null)
                 {
                     _es.Close();

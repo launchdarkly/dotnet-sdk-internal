@@ -63,7 +63,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             IDiagnosticStore diagnosticStore, IDiagnosticDisabler diagnosticDisabler, CountdownEvent diagnosticCountdown)
         {
             return new DefaultEventProcessor(config, mockSender.Object, new TestUserDeduplicator(),
-                diagnosticStore, diagnosticDisabler, () => { diagnosticCountdown.Signal(); });
+                diagnosticStore, diagnosticDisabler, NullLogger, () => { diagnosticCountdown.Signal(); });
         }
 
         private void FlushAndWait(DefaultEventProcessor ep)

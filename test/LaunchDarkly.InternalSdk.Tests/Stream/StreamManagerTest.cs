@@ -8,6 +8,8 @@ using LaunchDarkly.Sdk.Internal.Events;
 using Moq;
 using Xunit;
 
+using static LaunchDarkly.Sdk.TestUtil;
+
 namespace LaunchDarkly.Sdk.Internal.Stream
 {
     public class StreamManagerTest
@@ -44,7 +46,8 @@ namespace LaunchDarkly.Sdk.Internal.Stream
         private StreamManager CreateManager()
         {
             return new StreamManager(_streamProcessor, _streamProperties, _config,
-                SimpleClientEnvironment.Instance, _eventSourceCreator.Create, _diagnosticStore);
+                SimpleClientEnvironment.Instance, _eventSourceCreator.Create, _diagnosticStore,
+                NullLogger);
         }
 
         [Fact]
@@ -96,7 +99,7 @@ namespace LaunchDarkly.Sdk.Internal.Stream
                 SdkKey = SdkKey
             };
             using (StreamManager sm = new StreamManager(_streamProcessor, _streamProperties, config,
-                SimpleClientEnvironment.Instance, _eventSourceCreator.Create, null))
+                SimpleClientEnvironment.Instance, _eventSourceCreator.Create, null, NullLogger))
             {
                 sm.Start();
                 Assert.False(_eventSourceCreator.ReceivedHeaders.ContainsKey("X-LaunchDarkly-Wrapper"));
@@ -112,7 +115,7 @@ namespace LaunchDarkly.Sdk.Internal.Stream
                 WrapperName = "Xamarin",
             };
             using (StreamManager sm = new StreamManager(_streamProcessor, _streamProperties, config,
-                SimpleClientEnvironment.Instance, _eventSourceCreator.Create, null))
+                SimpleClientEnvironment.Instance, _eventSourceCreator.Create, null, NullLogger))
             {
                 sm.Start();
                 Assert.Equal("Xamarin", _eventSourceCreator.ReceivedHeaders["X-LaunchDarkly-Wrapper"]);
@@ -128,7 +131,7 @@ namespace LaunchDarkly.Sdk.Internal.Stream
                 WrapperVersion = "1.0.0"
             };
             using (StreamManager sm = new StreamManager(_streamProcessor, _streamProperties, config,
-                SimpleClientEnvironment.Instance, _eventSourceCreator.Create, null))
+                SimpleClientEnvironment.Instance, _eventSourceCreator.Create, null, NullLogger))
             {
                 sm.Start();
                 Assert.False(_eventSourceCreator.ReceivedHeaders.ContainsKey("X-LaunchDarkly-Wrapper"));
@@ -145,7 +148,7 @@ namespace LaunchDarkly.Sdk.Internal.Stream
                 WrapperVersion = "1.0.0"
             };
             using (StreamManager sm = new StreamManager(_streamProcessor, _streamProperties, config,
-                SimpleClientEnvironment.Instance, _eventSourceCreator.Create, null))
+                SimpleClientEnvironment.Instance, _eventSourceCreator.Create, null, NullLogger))
             {
                 sm.Start();
                 Assert.Equal("Xamarin/1.0.0", _eventSourceCreator.ReceivedHeaders["X-LaunchDarkly-Wrapper"]);
