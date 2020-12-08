@@ -200,6 +200,7 @@ namespace LaunchDarkly.Sdk.Internal.Stream
         {
             var ex = _httpProperties.HttpExceptionConverter(e.Exception);
             LogHelpers.LogException(_logger, "Encountered EventSource error", ex);
+            var recoverable = true;
             if (ex is EventSource.EventSourceServiceUnsuccessfulResponseException respEx)
             {
                 int status = respEx.StatusCode;
@@ -207,10 +208,12 @@ namespace LaunchDarkly.Sdk.Internal.Stream
                 RecordStreamInit(true);
                 if (!HttpErrors.IsRecoverable(status))
                 {
+                    recoverable = false;
                     _initTask.TrySetException(ex); // sends this exception to the client if we haven't already started up
                     ((IDisposable)this).Dispose();
                 }
             }
+            _streamProcessor.HandleError(this, ex, recoverable);
         }
 
         void IDisposable.Dispose()

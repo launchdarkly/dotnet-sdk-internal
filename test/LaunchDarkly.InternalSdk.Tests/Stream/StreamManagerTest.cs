@@ -168,10 +168,13 @@ namespace LaunchDarkly.Sdk.Internal.Stream
             using (StreamManager sm = CreateManager())
             {
                 sm.Start();
-                ExceptionEventArgs e = new ExceptionEventArgs(new Exception("whatever"));
-                _mockEventSource.Raise(es => es.Error += null, e);
+                var e = new Exception("whatever");
+                var eea = new ExceptionEventArgs(e);
+                _mockEventSource.Raise(es => es.Error += null, eea);
 
                 _mockEventSource.Verify(es => es.Close(), Times.Never());
+
+                _mockStreamProcessor.Verify(sp => sp.HandleError(sm, e, true));
             }
         }
         
@@ -210,8 +213,8 @@ namespace LaunchDarkly.Sdk.Internal.Stream
             using (StreamManager sm = CreateManager())
             {
                 Task<bool> initTask = sm.Start();
-                Exception e = new EventSourceServiceUnsuccessfulResponseException("", status);
-                ExceptionEventArgs eea = new ExceptionEventArgs(e);
+                var e = new EventSourceServiceUnsuccessfulResponseException("", status);
+                var eea = new ExceptionEventArgs(e);
                 _mockEventSource.Raise(es => es.Error += null, eea);
 
                 _mockEventSource.Verify(es => es.Close());
@@ -219,6 +222,8 @@ namespace LaunchDarkly.Sdk.Internal.Stream
                 Assert.True(initTask.IsFaulted);
                 Assert.Equal(e, initTask.Exception.InnerException);
                 Assert.False(sm.Initialized);
+
+                _mockStreamProcessor.Verify(sp => sp.HandleError(sm, e, false));
             }
         }
 
@@ -227,11 +232,15 @@ namespace LaunchDarkly.Sdk.Internal.Stream
             using (StreamManager sm = CreateManager())
             {
                 Task<bool> initTask = sm.Start();
-                ExceptionEventArgs e = new ExceptionEventArgs(new EventSourceServiceUnsuccessfulResponseException("", 500));
-                _mockEventSource.Raise(es => es.Error += null, e);
+
+                var e = new EventSourceServiceUnsuccessfulResponseException("", 500);
+                var eea = new ExceptionEventArgs(e);
+                _mockEventSource.Raise(es => es.Error += null, eea);
 
                 _mockEventSource.Verify(es => es.Close(), Times.Never());
                 Assert.False(initTask.IsCompleted);
+
+                _mockStreamProcessor.Verify(sp => sp.HandleError(sm, e, true));
             }
         }
     }
