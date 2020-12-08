@@ -15,19 +15,17 @@ namespace LaunchDarkly.Sdk.Internal.Events
         // between them is that the "WithReasons" one always includes the evaluation reason in the
         // event, and the other one doesn't (except in the "experiment" case described in
         // IFlagEventProperties.IsExperiment).
-        public static EventFactory Default { get; } = new EventFactory(CurrentTime, false);
-        public static EventFactory DefaultWithReasons { get; } = new EventFactory(CurrentTime, true);
+        public static EventFactory Default { get; } = new EventFactory(() => UnixMillisecondTime.Now, false);
+        public static EventFactory DefaultWithReasons { get; } = new EventFactory(() => UnixMillisecondTime.Now, true);
 
-        public readonly Func<long> GetTimestamp;
+        public readonly Func<UnixMillisecondTime> GetTimestamp;
         public bool IncludeReasons { get; }
 
-        public EventFactory(Func<long> getTimestamp, bool includeReasons)
+        public EventFactory(Func<UnixMillisecondTime> getTimestamp, bool includeReasons)
         {
             GetTimestamp = getTimestamp;
             IncludeReasons = includeReasons;
         }
-
-        private static long CurrentTime() => Util.GetUnixTimestampMillis(DateTime.UtcNow);
 
         /// <summary>
         /// Creates a feature request event for a successful evaluation.

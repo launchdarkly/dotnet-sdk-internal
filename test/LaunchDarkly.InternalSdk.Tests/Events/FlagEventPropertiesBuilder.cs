@@ -7,7 +7,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         public string Key { get; internal set; }
         public int EventVersion { get; internal set; }
         public bool TrackEvents { get; internal set; }
-        public long? DebugEventsUntilDate { get; internal set; }
+        public UnixMillisecondTime? DebugEventsUntilDate { get; internal set; }
 
         public EvaluationReason ExperimentReason { get; internal set; }
 
@@ -22,7 +22,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         private readonly string _key;
         private int _version;
         private bool _trackEvents;
-        private long? _debugEventsUntilDate;
+        private UnixMillisecondTime? _debugEventsUntilDate;
         private EvaluationReason _experimentReason;
 
         internal FlagEventPropertiesBuilder(string key)
@@ -62,7 +62,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             return this;
         }
 
-        internal FlagEventPropertiesBuilder DebugEventsUntilDate(long? debugEventsUntilDate)
+        internal FlagEventPropertiesBuilder DebugEventsUntilDate(UnixMillisecondTime? debugEventsUntilDate)
         {
             _debugEventsUntilDate = debugEventsUntilDate;
             return this;

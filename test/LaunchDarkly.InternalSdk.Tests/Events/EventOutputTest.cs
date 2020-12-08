@@ -7,10 +7,13 @@ namespace LaunchDarkly.Sdk.Internal.Events
 {
     public class EventOutputTest
     {
+        private static EventFactory EventFactoryWithFixedTime(long timeMillis, bool withReasons = false) =>
+            new EventFactory(() => UnixMillisecondTime.OfMillis(timeMillis), withReasons);
+
         [Fact]
         public void AllUserAttributesAreSerialized()
         {
-            var f = new EventOutputFormatter(new SimpleConfiguration());
+            var f = new EventOutputFormatter(new EventsConfiguration());
             var user = User.Builder("userkey")
                 .Anonymous(true)
                 .Avatar("http://avatar")
@@ -37,25 +40,25 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 ""name"":""me"",
                 ""secondary"":""s""
                 }");
-            TestInlineUserSerialization(user, userJson, new SimpleConfiguration());
+            TestInlineUserSerialization(user, userJson, new EventsConfiguration());
         }
 
         [Fact]
         public void UnsetUserAttributesAreNotSerialized()
         {
-            var f = new EventOutputFormatter(new SimpleConfiguration());
+            var f = new EventOutputFormatter(new EventsConfiguration());
             var user = User.Builder("userkey")
                 .Build();
             var userJson = LdValue.Parse(@"{
                 ""key"":""userkey""
                 }");
-            TestInlineUserSerialization(user, userJson, new SimpleConfiguration());
+            TestInlineUserSerialization(user, userJson, new EventsConfiguration());
         }
 
         [Fact]
         public void AllAttributesPrivateMakesAttributesPrivate()
         {
-            var f = new EventOutputFormatter(new SimpleConfiguration());
+            var f = new EventOutputFormatter(new EventsConfiguration());
             var user = User.Builder("userkey")
                 .Anonymous(true)
                 .Avatar("http://avatar")
@@ -77,7 +80,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                     ""firstName"", ""ip"", ""lastName"", ""name"", ""secondary""
                 ]
                 }");
-            var config = new SimpleConfiguration() { AllAttributesPrivate = true };
+            var config = new EventsConfiguration() { AllAttributesPrivate = true };
             TestInlineUserSerialization(user, userJson, config);
         }
         
@@ -116,7 +119,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 .Name("me")
                 .Build();
             var userJson = LdValue.Parse(@"{""key"":""userkey"",""name"":""me""}");
-            var f = new EventOutputFormatter(new SimpleConfiguration());
+            var f = new EventOutputFormatter(new EventsConfiguration());
             var emptySummary = new EventSummary();
 
             var featureEvent = EventFactory.Default.NewFeatureRequestEvent(
@@ -142,7 +145,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             Assert.Equal(user.Key, outputEvent.Get("userKey").AsString);
 
             // user is always inlined in index event
-            var indexEvent = new IndexEvent(0, user);
+            var indexEvent = new IndexEvent(UnixMillisecondTime.OfMillis(0), user);
             outputEvent = LdValue.Parse(f.SerializeOutputEvents(new Event[] { indexEvent }, emptySummary, out count)).Get(0);
             Assert.Equal(1, count);
             Assert.Equal(LdValue.Null, outputEvent.Get("userKey"));
@@ -152,8 +155,8 @@ namespace LaunchDarkly.Sdk.Internal.Events
         [Fact]
         public void FeatureEventIsSerialized()
         {
-            var factory = new EventFactory(() => 100000, false);
-            var factoryWithReason = new EventFactory(() => 100000, true);
+            var factory = EventFactoryWithFixedTime(100000, false);
+            var factoryWithReason = EventFactoryWithFixedTime(100000, true);
             var flag = new FlagEventPropertiesBuilder("flag")
                 .Version(11)
                 .Build();
@@ -233,7 +236,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         [Fact]
         public void IdentifyEventIsSerialized()
         {
-            var factory = new EventFactory(() => 100000, false);
+            var factory = EventFactoryWithFixedTime(100000);
             var user = User.Builder("userkey").Name("me").Build();
 
             var ie = factory.NewIdentifyEvent(user);
@@ -249,7 +252,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         [Fact]
         public void CustomEventIsSerialized()
         {
-            var factory = new EventFactory(() => 100000, false);
+            var factory = EventFactoryWithFixedTime(100000);
             var user = User.Builder("userkey").Name("me").Build();
 
             var ceWithoutData = factory.NewCustomEvent("custom", user, LdValue.Null);
@@ -297,7 +300,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         public void SummaryEventIsSerialized()
         {
             var summary = new EventSummary();
-            summary.NoteTimestamp(1001);
+            summary.NoteTimestamp(UnixMillisecondTime.OfMillis(1001));
 
             summary.IncrementCounter("first", 1, 11, LdValue.Of("value1a"), LdValue.Of("default1"));
 
@@ -311,10 +314,10 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
             summary.IncrementCounter("third", null, null, LdValue.Of("default3"), LdValue.Of("default3")); // flag doesn't exist (no version)
 
-            summary.NoteTimestamp(1000);
-            summary.NoteTimestamp(1002);
+            summary.NoteTimestamp(UnixMillisecondTime.OfMillis(1000));
+            summary.NoteTimestamp(UnixMillisecondTime.OfMillis(1002));
 
-            var f = new EventOutputFormatter(new SimpleConfiguration());
+            var f = new EventOutputFormatter(new EventsConfiguration());
             var outputEvent = LdValue.Parse(f.SerializeOutputEvents(new Event[0], summary, out var count)).Get(0);
             Assert.Equal(1, count);
 
@@ -344,7 +347,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 LdValue.Parse(@"{""unknown"":true,""value"":""default3"",""count"":1}"));
         }
 
-        private void TestInlineUserSerialization(User user, LdValue expectedJsonValue, SimpleConfiguration config)
+        private void TestInlineUserSerialization(User user, LdValue expectedJsonValue, EventsConfiguration config)
         {
             config.InlineUsersInEvents = true;
             var f = new EventOutputFormatter(config);
@@ -372,7 +375,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             Assert.Equal(LdValue.Null, outputEvent.Get("userKey"));
             Assert.Equal(expectedJsonValue, outputEvent.Get("user"));
 
-            var indexEvent = new IndexEvent(0, user);
+            var indexEvent = new IndexEvent(UnixMillisecondTime.OfMillis(0), user);
             outputEvent = LdValue.Parse(f.SerializeOutputEvents(new Event[] { indexEvent }, emptySummary, out count)).Get(0);
             Assert.Equal(1, count);
             Assert.Equal(LdValue.Null, outputEvent.Get("userKey"));
@@ -422,7 +425,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             topJsonBuilder.Add("custom", customJsonBuilder.Build());
             topJsonBuilder.Add("privateAttrs", LdValue.ArrayOf(LdValue.Of(privateAttrName)));
             var userJson = topJsonBuilder.Build();
-            var config = new SimpleConfiguration();
+            var config = new EventsConfiguration();
             if (globallyPrivate)
             {
                 config.PrivateAttributeNames = ImmutableHashSet.Create<string>(privateAttrName);
@@ -433,7 +436,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
         private void TestEventSerialization(Event e, LdValue expectedJsonValue)
         {
-            var f = new EventOutputFormatter(new SimpleConfiguration());
+            var f = new EventOutputFormatter(new EventsConfiguration());
             var emptySummary = new EventSummary();
 
             var outputEvent = LdValue.Parse(f.SerializeOutputEvents(new Event[] { e }, emptySummary, out var count)).Get(0);

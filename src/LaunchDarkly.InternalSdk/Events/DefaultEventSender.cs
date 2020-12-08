@@ -6,27 +6,38 @@ using System.Threading;
 using System.Threading.Tasks;
 using LaunchDarkly.Logging;
 using LaunchDarkly.Sdk.Internal.Helpers;
+using LaunchDarkly.Sdk.Internal.Http;
 
 namespace LaunchDarkly.Sdk.Internal.Events
 {
     public sealed class DefaultEventSender : IEventSender
     {
+        public static readonly TimeSpan DefaultRetryInterval = TimeSpan.FromSeconds(1);
+
         private const int MaxAttempts = 2;
         private const string CurrentSchemaVersion = "3";
 
         private readonly HttpClient _httpClient;
+        private readonly HttpProperties _httpProperties;
         private readonly Uri _eventsUri;
         private readonly Uri _diagnosticUri;
         private readonly TimeSpan _timeout;
+        private readonly TimeSpan _retryInterval;
         private readonly Logger _logger;
 
-        public DefaultEventSender(HttpClient httpClient, IEventProcessorConfiguration config, Logger logger)
+        public DefaultEventSender(HttpProperties httpProperties, EventsConfiguration config, Logger logger)
         {
-            _httpClient = httpClient;
+            _httpClient = httpProperties.NewHttpClient();
+            _httpProperties = httpProperties;
             _eventsUri = config.EventsUri;
             _diagnosticUri = config.DiagnosticUri;
-            _timeout = config.HttpClientTimeout;
+            _retryInterval = config.RetryInterval ?? DefaultRetryInterval;
             _logger = logger;
+
+            // Currently we do not have a good method of setting the connection timeout separately
+            // from the socket read timeout, so the value we're computing here is for the entire
+            // request-response cycle. See comments in HttpProperties.
+            _timeout = httpProperties.ConnectTimeout.Add(httpProperties.ReadTimeout);
         }
 
         void IDisposable.Dispose()
@@ -68,7 +79,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             {
                 if (attempt > 0)
                 {
-                    await Task.Delay(TimeSpan.FromSeconds(1));
+                    await Task.Delay(_retryInterval);
                 }
 
                 using (var cts = new CancellationTokenSource(_timeout))
@@ -97,8 +108,8 @@ namespace LaunchDarkly.Sdk.Internal.Events
                                 }
                                 else
                                 {
-                                    errorMessage = Util.HttpErrorMessageBase((int)response.StatusCode);
-                                    canRetry = Util.IsHttpErrorRecoverable((int)response.StatusCode);
+                                    errorMessage = HttpErrors.ErrorMessageBase((int)response.StatusCode);
+                                    canRetry = HttpErrors.IsRecoverable((int)response.StatusCode);
                                     mustShutDown = !canRetry;
                                 }
                             }
@@ -144,6 +155,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         private HttpRequestMessage PrepareRequest(Uri uri, string payloadId)
         {
             var request = new HttpRequestMessage(HttpMethod.Post, uri);
+            _httpProperties.AddHeaders(request);
             if (payloadId != null) // payloadId is provided for regular analytics events payloads, not for diagnostic events
             {
                 request.Headers.Add("X-LaunchDarkly-Payload-ID", payloadId);

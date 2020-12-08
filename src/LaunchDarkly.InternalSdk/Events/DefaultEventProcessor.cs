@@ -5,7 +5,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using LaunchDarkly.Logging;
 using LaunchDarkly.Sdk.Interfaces;
-using LaunchDarkly.Sdk.Internal.Helpers;
 
 namespace LaunchDarkly.Sdk.Internal.Events
 {
@@ -27,23 +26,28 @@ namespace LaunchDarkly.Sdk.Internal.Events
         private AtomicBoolean _sentInitialDiagnostics;
         private AtomicBoolean _inputCapacityExceeded;
 
-        public DefaultEventProcessor(IEventProcessorConfiguration config,
+        public DefaultEventProcessor(
+            EventsConfiguration config,
             IEventSender eventSender,
             IUserDeduplicator userDeduplicator,
             IDiagnosticStore diagnosticStore,
             IDiagnosticDisabler diagnosticDisabler,
             Logger logger,
-            Action testActionOnDiagnosticSend)
+            Action testActionOnDiagnosticSend
+            )
         {
             _logger = logger;
             _stopped = new AtomicBoolean(false);
             _offline = new AtomicBoolean(false);
             _sentInitialDiagnostics = new AtomicBoolean(false);
             _inputCapacityExceeded = new AtomicBoolean(false);
-            _messageQueue = new BlockingCollection<IEventMessage>(config.EventCapacity);
+            _messageQueue = new BlockingCollection<IEventMessage>(config.EventCapacity > 0 ? config.EventCapacity : 1);
             _dispatcher = new EventDispatcher(config, _messageQueue, eventSender, userDeduplicator, diagnosticStore, _logger, testActionOnDiagnosticSend);
-            _flushTimer = new Timer(DoBackgroundFlush, null, config.EventFlushInterval,
-                config.EventFlushInterval);
+            if (config.EventFlushInterval > TimeSpan.Zero)
+            {
+                _flushTimer = new Timer(DoBackgroundFlush, null, config.EventFlushInterval,
+                    config.EventFlushInterval);
+            }
             _diagnosticStore = diagnosticStore;
             _diagnosticRecordingInterval = config.DiagnosticRecordingInterval;
             if (userDeduplicator != null && userDeduplicator.FlushInterval.HasValue)
@@ -76,7 +80,10 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 if (enabled)
                 {
                     TimeSpan initialDelay = _diagnosticRecordingInterval - (DateTime.Now - _diagnosticStore.DataSince);
-                    TimeSpan safeDelay = Util.Clamp(initialDelay, TimeSpan.Zero, _diagnosticRecordingInterval);
+                    TimeSpan safeDelay =
+                        (initialDelay < TimeSpan.Zero) ?
+                        TimeSpan.Zero :
+                        ((initialDelay > _diagnosticRecordingInterval) ? _diagnosticRecordingInterval: initialDelay);
                     _diagnosticTimer = new Timer(DoDiagnosticSend, null, safeDelay, _diagnosticRecordingInterval);
                 }
             }
@@ -85,13 +92,19 @@ namespace LaunchDarkly.Sdk.Internal.Events
             {
                 var unsent = _diagnosticStore.PersistedUnsentEvent;
                 var init = _diagnosticStore.InitEvent;
-                if (unsent.HasValue)
+                if (unsent.HasValue || init.HasValue)
                 {
-                    Task.Run(() => _dispatcher.SendDiagnosticEventAsync(unsent.Value));
-                }
-                if (init.HasValue)
-                {
-                    Task.Run(() => _dispatcher.SendDiagnosticEventAsync(init.Value));
+                    Task.Run(async () => // do these in a single task for test determinacy
+                    {
+                        if (unsent.HasValue)
+                        {
+                            await _dispatcher.SendDiagnosticEventAsync(unsent.Value);
+                        }
+                        if (init.HasValue)
+                        {
+                            await _dispatcher.SendDiagnosticEventAsync(init.Value);
+                        }
+                    });
                 }
             }
         }
@@ -129,11 +142,8 @@ namespace LaunchDarkly.Sdk.Internal.Events
             {
                 if (!_stopped.GetAndSet(true))
                 {
-                    _flushTimer.Dispose();
-                    if (_flushUsersTimer != null)
-                    {
-                        _flushUsersTimer.Dispose();
-                    }
+                    _flushTimer?.Dispose();
+                    _flushUsersTimer?.Dispose();
                     SubmitMessage(new FlushMessage());
                     ShutdownMessage message = new ShutdownMessage();
                     SubmitMessage(message);
@@ -199,27 +209,6 @@ namespace LaunchDarkly.Sdk.Internal.Events
         }
     }
 
-    internal class AtomicBoolean
-    {
-        internal volatile int _value;
-
-        internal AtomicBoolean(bool value)
-        {
-            _value = value ? 1 : 0;
-        }
-
-        internal bool Get()
-        {
-            return _value != 0;
-        }
-
-        internal bool GetAndSet(bool newValue)
-        {
-            int old = Interlocked.Exchange(ref _value, newValue ? 1 : 0);
-            return old != 0;
-        }
-    }
-
     internal interface IEventMessage { }
 
     internal class EventMessage : IEventMessage
@@ -266,7 +255,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
     {
         private static readonly int MaxFlushWorkers = 5;
 
-        private readonly IEventProcessorConfiguration _config;
+        private readonly EventsConfiguration _config;
         private readonly IDiagnosticStore _diagnosticStore;
         private readonly IUserDeduplicator _userDeduplicator;
         private readonly CountdownEvent _flushWorkersCounter;
@@ -277,13 +266,15 @@ namespace LaunchDarkly.Sdk.Internal.Events
         private long _lastKnownPastTime;
         private volatile bool _disabled;
 
-        internal EventDispatcher(IEventProcessorConfiguration config,
+        internal EventDispatcher(
+            EventsConfiguration config,
             BlockingCollection<IEventMessage> messageQueue,
             IEventSender eventSender,
             IUserDeduplicator userDeduplicator,
             IDiagnosticStore diagnosticStore,
             Logger logger,
-            Action testActionOnDiagnosticSend)
+            Action testActionOnDiagnosticSend
+            )
         {
             _config = config;
             _diagnosticStore = diagnosticStore;
@@ -294,7 +285,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             _logger = logger;
             _random = new Random();
 
-            EventBuffer buffer = new EventBuffer(config.EventCapacity, _diagnosticStore, _logger);
+            EventBuffer buffer = new EventBuffer(config.EventCapacity > 0 ? config.EventCapacity : 1, _diagnosticStore, _logger);
 
             Task.Run(() => RunMainLoop(messageQueue, buffer));
         }
@@ -351,8 +342,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 }
                 catch (Exception e)
                 {
-                    _logger.Error("Unexpected error in event dispatcher thread: {0}", LogValues.ExceptionSummary(e));
-                    _logger.Debug(LogValues.ExceptionTrace(e));
+                    LogHelpers.LogException(_logger, "Unexpected error in event dispatcher thread", e);
                 }
             }
         }
@@ -435,8 +425,8 @@ namespace LaunchDarkly.Sdk.Internal.Events
             if (fe.DebugEventsUntilDate != null)
             {
                 long lastPast = Interlocked.Read(ref _lastKnownPastTime);
-                if (fe.DebugEventsUntilDate > lastPast &&
-                    fe.DebugEventsUntilDate > Util.GetUnixTimestampMillis(DateTime.Now))
+                if (fe.DebugEventsUntilDate.Value.Value > lastPast &&
+                    fe.DebugEventsUntilDate.Value.Value > UnixMillisecondTime.Now.Value)
                 {
                     return true;
                 }
@@ -455,8 +445,8 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 if (fe.DebugEventsUntilDate != null)
                 {
                     long lastPast = Interlocked.Read(ref _lastKnownPastTime);
-                    if (fe.DebugEventsUntilDate > lastPast &&
-                        fe.DebugEventsUntilDate > Util.GetUnixTimestampMillis(DateTime.Now))
+                    if (fe.DebugEventsUntilDate.Value.Value > lastPast &&
+                        fe.DebugEventsUntilDate.Value.Value > UnixMillisecondTime.Now.Value)
                     {
                         return true;
                     }
@@ -521,8 +511,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             }
             catch (Exception e)
             {
-                _logger.Error("Error preparing events, will not send: {0}", LogValues.ExceptionSummary(e));
-                _logger.Debug(LogValues.ExceptionTrace(e));
+                LogHelpers.LogException(_logger, "Error preparing events, will not send", e);
                 return;
             }
 
@@ -534,7 +523,8 @@ namespace LaunchDarkly.Sdk.Internal.Events
             }
             if (result.TimeFromServer.HasValue)
             {
-                Interlocked.Exchange(ref _lastKnownPastTime, Util.GetUnixTimestampMillis(result.TimeFromServer.Value));
+                Interlocked.Exchange(ref _lastKnownPastTime,
+                    UnixMillisecondTime.FromDateTime(result.TimeFromServer.Value).Value);
             }
         }
 

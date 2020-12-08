@@ -21,7 +21,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         public IImmutableDictionary<string, LdValue> Custom { get; internal set; }
         public ImmutableSortedSet<string> PrivateAttrs { get; set; }
 
-        public static EventUser FromUser(User user, IEventProcessorConfiguration config)
+        public static EventUser FromUser(User user, EventsConfiguration config)
         {
             EventUserBuilder eub = new EventUserBuilder(user, config);
             return eub.Build();
@@ -30,12 +30,12 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
     public struct EventUserBuilder
     {
-        private IEventProcessorConfiguration _config;
+        private EventsConfiguration _config;
         private User _user;
         private EventUser _result;
         private ImmutableSortedSet<string>.Builder _privateAttrs;
 
-        public EventUserBuilder(User user, IEventProcessorConfiguration config)
+        public EventUserBuilder(User user, EventsConfiguration config)
         {
             _user = user;
             _config = config;

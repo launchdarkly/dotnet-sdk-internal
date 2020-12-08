@@ -1,7 +1,8 @@
 using System;
+using System.Collections.Immutable;
 using System.Linq;
 using System.Threading.Tasks;
-using LaunchDarkly.Sdk.Internal.Helpers;
+using LaunchDarkly.Sdk.Internal.Http;
 using WireMock;
 using WireMock.Logging;
 using WireMock.RequestBuilders;
@@ -39,15 +40,14 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
         private DefaultEventSender MakeSender(WireMockServer server)
         {
-            var config = new SimpleConfiguration();
-            config.SdkKey = AuthKey;
-            if (server != null)
+            var config = new EventsConfiguration
             {
-                config.EventsUri = new Uri(new Uri(server.Urls[0]), EventsUriPath);
-                config.DiagnosticUri = new Uri(new Uri(server.Urls[0]), DiagnosticUriPath);
-            }
-            var httpClient = Util.MakeHttpClient(config, SimpleClientEnvironment.Instance);
-            return new DefaultEventSender(httpClient, config, NullLogger);
+                DiagnosticUri = new Uri(new Uri(server.Urls[0]), DiagnosticUriPath),
+                EventsUri = new Uri(new Uri(server.Urls[0]), EventsUriPath),
+                RetryInterval = TimeSpan.FromMilliseconds(10)
+            };
+            var httpProps = HttpProperties.Default.WithAuthorizationKey(AuthKey);
+            return new DefaultEventSender(httpProps, config, NullLogger);
         }
 
         [Fact]

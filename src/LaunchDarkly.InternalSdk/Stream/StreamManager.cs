@@ -1,36 +1,43 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Threading;
+using System.Linq;
 using System.Threading.Tasks;
 using LaunchDarkly.EventSource;
 using LaunchDarkly.Logging;
 using LaunchDarkly.Sdk.Internal.Events;
 using LaunchDarkly.Sdk.Internal.Helpers;
+using LaunchDarkly.Sdk.Internal.Http;
 
 namespace LaunchDarkly.Sdk.Internal.Stream
-{
-    // Internal base implementation of the LaunchDarkly streaming connection. This class
-    // manages an EventSource instance, and is responsible for restarting the connection if
-    // necessary. It delegates all platform-specific logic to an implementation of
-    // IStreamProcessor. The IStreamProcessor does not interact with the EventSource API directly.
+{ 
+    /// <summary>
+    /// Internal base implementation of the LaunchDarkly streaming connection.
+    /// </summary>
+    /// <remarks>
+    /// This class manages an EventSource instance, and is responsible for restarting the connection if
+    /// necessary. It delegates all platform-specific logic to an implementation of IStreamProcessor
+    /// that is provided by the caller, which does not interact with the stream directly.
+    /// </remarks>
     public sealed class StreamManager : IDisposable
     {
-        private const int UNINITIALIZED = 0;
-        private const int INITIALIZED = 1;
+        // The read timeout for the stream is not the same read timeout that can be set in the SDK configuration.
+        // It is a fixed value that is set to be slightly longer than the expected interval between heartbeats
+        // from the LaunchDarkly streaming server. If this amount of time elapses with no new data, the connection
+        // will be cycled.
+        private static readonly TimeSpan LaunchDarklyStreamReadTimeout = TimeSpan.FromMinutes(5);
 
-        public delegate IEventSource EventSourceCreator(StreamProperties streamProperties, IDictionary<string, string> headers);
+        public delegate IEventSource EventSourceCreator(StreamProperties streamProperties, HttpProperties httpProperties);
 
         private readonly IStreamProcessor _streamProcessor;
         private readonly StreamProperties _streamProperties;
-        private readonly IStreamManagerConfiguration _config;
-        private readonly ClientEnvironment _clientEnvironment;
+        private readonly HttpProperties _httpProperties;
+        private readonly TimeSpan _initialReconnectDelay;
         private readonly TaskCompletionSource<bool> _initTask;
         private readonly EventSourceCreator _esCreator;
         private readonly EventSource.ExponentialBackoffWithDecorrelation _backOff;
         private readonly IDiagnosticStore _diagnosticStore;
+        private readonly AtomicBoolean _initialized = new AtomicBoolean(false);
         private readonly Logger _logger;
         private IEventSource _es;
-        private int _initialized = UNINITIALIZED;
         internal DateTime _esStarted;
 
         /// <summary>
@@ -38,6 +45,7 @@ namespace LaunchDarkly.Sdk.Internal.Stream
         /// </summary>
         /// <param name="streamProcessor">A platform-specific implementation of IStreamProcessor.</param>
         /// <param name="streamProperties">HTTP request properties for the stream.</param>
+        /// <param name="httpProperties">General HTTP configuration properties.</param>
         /// <param name="config">An implementation of IBaseConfiguration.</param>
         /// <param name="clientEnvironment">A subclass of ClientEnvironment.</param>
         /// <param name="eventSourceCreator">Null in normal usage; pass a non-null delegate if you
@@ -45,20 +53,26 @@ namespace LaunchDarkly.Sdk.Internal.Stream
         /// <param name="diagnosticStore">An implementation of IDiagnosticStore. The StreamManager
         /// will call AddStreamInit to record the stream init for diagnostics.</param>
         /// <param name="logger">A logger instance for messages from StreamManager and EventSource.</param>
-        public StreamManager(IStreamProcessor streamProcessor, StreamProperties streamProperties,
-            IStreamManagerConfiguration config, ClientEnvironment clientEnvironment,
-            EventSourceCreator eventSourceCreator, IDiagnosticStore diagnosticStore,
+        public StreamManager(
+            IStreamProcessor streamProcessor,
+            StreamProperties streamProperties,
+            HttpProperties httpProperties,
+            TimeSpan initialReconnectDelay,
+            EventSourceCreator eventSourceCreator,
+            IDiagnosticStore diagnosticStore,
             Logger logger)
         {
             _logger = logger;
             _streamProcessor = streamProcessor;
             _streamProperties = streamProperties;
-            _config = config;
-            _clientEnvironment = clientEnvironment;
+            _httpProperties = httpProperties
+                .WithHeader("Accept", "text/event-stream");
+            _initialReconnectDelay = initialReconnectDelay;
             _diagnosticStore = diagnosticStore;
             _esCreator = eventSourceCreator ?? DefaultEventSourceCreator;
             _initTask = new TaskCompletionSource<bool>();
-            _backOff = new EventSource.ExponentialBackoffWithDecorrelation(_config.ReconnectTime, TimeSpan.FromMilliseconds(30000));
+            _backOff = new EventSource.ExponentialBackoffWithDecorrelation(initialReconnectDelay,
+                EventSource.Configuration.MaximumRetryDuration);
         }
 
         // Stream processors should set this property to true as soon as they have received their
@@ -68,12 +82,11 @@ namespace LaunchDarkly.Sdk.Internal.Stream
         {
             get
             {
-                return _initialized == INITIALIZED;
+                return _initialized.Get();
             }
             set
             {
-                var newState = value ? INITIALIZED : UNINITIALIZED;
-                if (Interlocked.Exchange(ref _initialized, newState) == UNINITIALIZED && value)
+                if (!_initialized.GetAndSet(value) && value)
                 {
                     _initTask.SetResult(true);
                     _logger.Info("Initialized LaunchDarkly Stream Processor.");
@@ -85,10 +98,7 @@ namespace LaunchDarkly.Sdk.Internal.Stream
         // marked as completed as soon as the subclass implementation sets Initialized to true. 
         public Task<bool> Start()
         {
-            Dictionary<string, string> headers = Util.GetRequestHeaders(_config, _clientEnvironment);
-            headers.Add("Accept", "text/event-stream");
-
-            _es = _esCreator(_streamProperties, headers);
+            _es = _esCreator(_streamProperties, _httpProperties);
 
             _es.CommentReceived += OnComment;
             _es.MessageReceived += OnMessage;
@@ -124,24 +134,22 @@ namespace LaunchDarkly.Sdk.Internal.Stream
             }
             catch (Exception exc)
             {
-                _logger.Error("Unexpected error: {0}", LogValues.ExceptionSummary(exc));
-                _logger.Debug(LogValues.ExceptionTrace(exc));
+                LogHelpers.LogException(_logger, null, exc);
             }
         }
 
-        private IEventSource DefaultEventSourceCreator(StreamProperties streamProperties, IDictionary<string, string> headers)
+        private IEventSource DefaultEventSourceCreator(StreamProperties streamProperties, HttpProperties httpProperties)
         {
-            EventSource.Configuration config = EventSource.Configuration.Builder(streamProperties.StreamUri)
+            var configBuilder = EventSource.Configuration.Builder(streamProperties.StreamUri)
                 .Method(streamProperties.Method)
                 .RequestBodyFactory(() => streamProperties.RequestBody)
-                .MessageHandler(_config.HttpMessageHandler)
-                .ConnectionTimeout(_config.HttpClientTimeout)
-                .DelayRetryDuration(_config.ReconnectTime)
-                .ReadTimeout(_config.ReadTimeout)
-                .RequestHeaders(headers)
-                .Logger(_logger)
-                .Build();
-            return new EventSource.EventSource(config);
+                .MessageHandler(httpProperties.HttpMessageHandler)
+                .ConnectionTimeout(httpProperties.ConnectTimeout)
+                .DelayRetryDuration(_initialReconnectDelay)
+                .ReadTimeout(LaunchDarklyStreamReadTimeout)
+                .RequestHeaders(httpProperties.BaseHeaders.ToDictionary(kv => kv.Key, kv => kv.Value))
+                .Logger(_logger);
+            return new EventSource.EventSource(configBuilder.Build());
         }
 
         private async void OnMessage(object sender, EventSource.MessageReceivedEventArgs e)
@@ -153,18 +161,13 @@ namespace LaunchDarkly.Sdk.Internal.Stream
             catch (StreamJsonParsingException ex)
             {
                 _logger.Debug("Failed to deserialize JSON in {0} message:\n{1}",
-                    ex, e.EventName, e.Message.Data);
-
-                _logger.Error("Encountered an error reading feature data: {0}", LogValues.ExceptionSummary(ex));
-                _logger.Debug(LogValues.ExceptionTrace(ex));
-
+                    e.EventName, e.Message.Data);
+                LogHelpers.LogException(_logger, "Encountered an error reading stream data", ex);
                 Restart();
             }
             catch (Exception ex)
             {
-                _logger.Error("Unexpected error: {0}", LogValues.ExceptionSummary(ex));
-                _logger.Debug(LogValues.ExceptionTrace(ex));
-
+                LogHelpers.LogException(_logger, null, ex);
                 Restart();
             }
         }
@@ -195,15 +198,14 @@ namespace LaunchDarkly.Sdk.Internal.Stream
 
         private void OnError(object sender, EventSource.ExceptionEventArgs e)
         {
-            var ex = _config.TranslateHttpException(e.Exception);
-            _logger.Error("Encountered EventSource error: {0}", LogValues.ExceptionSummary(ex));
-            _logger.Debug(LogValues.ExceptionTrace(ex));
+            var ex = _httpProperties.HttpExceptionConverter(e.Exception);
+            LogHelpers.LogException(_logger, "Encountered EventSource error", ex);
             if (ex is EventSource.EventSourceServiceUnsuccessfulResponseException respEx)
             {
                 int status = respEx.StatusCode;
-                _logger.Error(Util.HttpErrorMessage(status, "streaming connection", "will retry"));
+                _logger.Error(HttpErrors.ErrorMessage(status, "streaming connection", "will retry"));
                 RecordStreamInit(true);
-                if (!Util.IsHttpErrorRecoverable(status))
+                if (!HttpErrors.IsRecoverable(status))
                 {
                     _initTask.TrySetException(ex); // sends this exception to the client if we haven't already started up
                     ((IDisposable)this).Dispose();

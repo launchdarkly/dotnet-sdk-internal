@@ -7,7 +7,10 @@ namespace LaunchDarkly.Sdk.Internal.Events
     public class EventSummarizerTest
     {
         private static readonly User _user = User.WithKey("key");
-        private static readonly EventFactory _eventFactory = new EventFactory(() => 1000, false);
+        private static readonly EventFactory _eventFactory = EventFactoryWithFixedTime(1000);
+
+        private static EventFactory EventFactoryWithFixedTime(long timeMillis) =>
+            new EventFactory(() => UnixMillisecondTime.OfMillis(timeMillis), false);
 
         [Fact]
         public void SummarizeEventDoesNothingForIdentifyEvent()
@@ -39,19 +42,19 @@ namespace LaunchDarkly.Sdk.Internal.Events
             EventSummarizer es = new EventSummarizer();
             IFlagEventProperties flag = new FlagEventPropertiesBuilder("key").Build();
             var nullResult = new EvaluationDetail<LdValue>(LdValue.Null, null, EvaluationReason.OffReason);
-            var factory1 = new EventFactory(() => 2000, false);
+            var factory1 = EventFactoryWithFixedTime(2000);
             Event event1 = factory1.NewFeatureRequestEvent(flag, _user, nullResult, LdValue.Null);
-            var factory2 = new EventFactory(() => 1000, false);
+            var factory2 = EventFactoryWithFixedTime(1000);
             Event event2 = factory2.NewFeatureRequestEvent(flag, _user, nullResult, LdValue.Null);
-            var factory3 = new EventFactory(() => 1500, false);
+            var factory3 = EventFactoryWithFixedTime(1500);
             Event event3 = factory3.NewFeatureRequestEvent(flag, _user, nullResult, LdValue.Null);
             es.SummarizeEvent(event1);
             es.SummarizeEvent(event2);
             es.SummarizeEvent(event3);
             EventSummary data = es.Snapshot();
 
-            Assert.Equal(1000, data.StartDate);
-            Assert.Equal(2000, data.EndDate);
+            Assert.Equal(1000, data.StartDate.Value);
+            Assert.Equal(2000, data.EndDate.Value);
         }
 
         [Fact]

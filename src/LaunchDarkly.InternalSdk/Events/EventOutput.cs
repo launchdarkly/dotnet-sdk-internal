@@ -3,16 +3,15 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using LaunchDarkly.Sdk.Interfaces;
-using LaunchDarkly.Sdk.Internal.Helpers;
 using Newtonsoft.Json;
 
 namespace LaunchDarkly.Sdk.Internal.Events
 {
     public sealed class EventOutputFormatter
     {
-        private readonly IEventProcessorConfiguration _config;
+        private readonly EventsConfiguration _config;
 
-        public EventOutputFormatter(IEventProcessorConfiguration config)
+        public EventOutputFormatter(EventsConfiguration config)
         {
             _config = config;
         }
@@ -28,7 +27,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
     public struct EventOutputFormatterScope
     {
-        private readonly IEventProcessorConfiguration _config;
+        private readonly EventsConfiguration _config;
         private readonly JsonWriter _jsonWriter;
         private readonly JsonSerializer _jsonSerializer;
 
@@ -41,7 +40,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 new MutableKeyValuePair<A, B> { Key = kv.Key, Value = kv.Value };
         }
 
-        public EventOutputFormatterScope(IEventProcessorConfiguration config, TextWriter tw, bool inlineUsers)
+        public EventOutputFormatterScope(EventsConfiguration config, TextWriter tw, bool inlineUsers)
         {
             _config = config;
             _jsonWriter = new JsonTextWriter(tw);
@@ -139,9 +138,9 @@ namespace LaunchDarkly.Sdk.Internal.Events
             _jsonWriter.WritePropertyName("kind");
             _jsonWriter.WriteValue("summary");
             _jsonWriter.WritePropertyName("startDate");
-            _jsonWriter.WriteValue(summary.StartDate);
+            _jsonWriter.WriteValue(summary.StartDate.Value);
             _jsonWriter.WritePropertyName("endDate");
-            _jsonWriter.WriteValue(summary.EndDate);
+            _jsonWriter.WriteValue(summary.EndDate.Value);
 
             _jsonWriter.WritePropertyName("features");
             _jsonWriter.WriteStartObject();
@@ -215,13 +214,13 @@ namespace LaunchDarkly.Sdk.Internal.Events
             }
         }
 
-        public void WithBaseObject(string kind, long creationDate, string key, Action<EventOutputFormatterScope> moreActions)
+        public void WithBaseObject(string kind, UnixMillisecondTime creationDate, string key, Action<EventOutputFormatterScope> moreActions)
         {
             _jsonWriter.WriteStartObject();
             _jsonWriter.WritePropertyName("kind");
             _jsonWriter.WriteValue(kind);
             _jsonWriter.WritePropertyName("creationDate");
-            _jsonWriter.WriteValue(creationDate);
+            _jsonWriter.WriteValue(creationDate.Value);
             MaybeWriteString("key", key);
             moreActions(this);
             _jsonWriter.WriteEndObject();

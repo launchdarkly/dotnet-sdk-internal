@@ -5,7 +5,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using LaunchDarkly.Sdk.Interfaces;
-using LaunchDarkly.Sdk.Internal.Helpers;
 using Newtonsoft.Json;
 using Moq;
 using Xunit;
@@ -16,18 +15,16 @@ namespace LaunchDarkly.Sdk.Internal.Events
 {
     public class DefaultEventProcessorTest
     {
-        private const String HttpDateFormat = "ddd, dd MMM yyyy HH:mm:ss 'GMT'";
-        private const string EventsUriPath = "/post-events-here";
-        private const string DiagnosticUriPath = "/post-diagnostic-here";
         private static readonly EvaluationReason _irrelevantReason = EvaluationReason.OffReason;
         
-        private SimpleConfiguration _config = new SimpleConfiguration();
+        private EventsConfiguration _config = new EventsConfiguration();
         private readonly User _user = User.Builder("userKey").Name("Red").Build();
         private readonly LdValue _userJson = LdValue.Parse("{\"key\":\"userKey\",\"name\":\"Red\"}");
         private readonly LdValue _scrubbedUserJson = LdValue.Parse("{\"key\":\"userKey\",\"privateAttrs\":[\"name\"]}");
 
         public DefaultEventProcessorTest()
         {
+            _config.EventCapacity = 100;
             _config.EventFlushInterval = TimeSpan.FromMilliseconds(-1);
             _config.DiagnosticRecordingInterval = TimeSpan.FromMinutes(5);
         }
@@ -54,12 +51,12 @@ namespace LaunchDarkly.Sdk.Internal.Events
             return mockDiagnosticStore;
         }
 
-        private DefaultEventProcessor MakeProcessor(SimpleConfiguration config, Mock<IEventSender> mockSender)
+        private DefaultEventProcessor MakeProcessor(EventsConfiguration config, Mock<IEventSender> mockSender)
         {
             return MakeProcessor(config, mockSender, null, null, null);
         }
 
-        private DefaultEventProcessor MakeProcessor(SimpleConfiguration config, Mock<IEventSender> mockSender,
+        private DefaultEventProcessor MakeProcessor(EventsConfiguration config, Mock<IEventSender> mockSender,
             IDiagnosticStore diagnosticStore, IDiagnosticDisabler diagnosticDisabler, CountdownEvent diagnosticCountdown)
         {
             return new DefaultEventProcessor(config, mockSender.Object, new TestUserDeduplicator(),
@@ -300,7 +297,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
             using (var ep = MakeProcessor(_config, mockSender))
             {
-                long futureTime = Util.GetUnixTimestampMillis(DateTime.Now) + 1000000;
+                var futureTime = UnixMillisecondTime.Now.PlusMillis(1000000);
                 IFlagEventProperties flag = new FlagEventPropertiesBuilder("flagkey").Version(11).DebugEventsUntilDate(futureTime).Build();
                 FeatureRequestEvent fe = EventFactory.Default.NewFeatureRequestEvent(flag, _user,
                     new EvaluationDetail<LdValue>(LdValue.Of("value"), 1, _irrelevantReason), LdValue.Null);
@@ -322,7 +319,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
             using (var ep = MakeProcessor(_config, mockSender))
             {
-                long futureTime = Util.GetUnixTimestampMillis(DateTime.Now) + 1000000;
+                var futureTime = UnixMillisecondTime.Now.PlusMillis(1000000);
                 IFlagEventProperties flag = new FlagEventPropertiesBuilder("flagkey").Version(11).TrackEvents(true)
                     .DebugEventsUntilDate(futureTime).Build();
                 FeatureRequestEvent fe = EventFactory.Default.NewFeatureRequestEvent(flag, _user,
@@ -357,7 +354,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
                 // Now send an event with debug mode on, with a "debug until" time that is further in
                 // the future than the server time, but in the past compared to the client.
-                long debugUntil = Util.GetUnixTimestampMillis(serverTime) + 1000;
+                var debugUntil = UnixMillisecondTime.FromDateTime(serverTime).PlusMillis(1000);
                 IFlagEventProperties flag = new FlagEventPropertiesBuilder("flagkey").Version(11).DebugEventsUntilDate(debugUntil).Build();
                 FeatureRequestEvent fe = EventFactory.Default.NewFeatureRequestEvent(flag, _user,
                     new EvaluationDetail<LdValue>(LdValue.Of("value"), 1, _irrelevantReason), LdValue.Null);
@@ -390,7 +387,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
                 // Now send an event with debug mode on, with a "debug until" time that is further in
                 // the future than the client time, but in the past compared to the server.
-                long debugUntil = Util.GetUnixTimestampMillis(serverTime) - 1000;
+                var debugUntil = UnixMillisecondTime.FromDateTime(serverTime).PlusMillis(-1000);
                 IFlagEventProperties flag = new FlagEventPropertiesBuilder("flagkey").Version(11).DebugEventsUntilDate(debugUntil).Build();
                 FeatureRequestEvent fe = EventFactory.Default.NewFeatureRequestEvent(flag, _user,
                     new EvaluationDetail<LdValue>(LdValue.Of("value"), 1, _irrelevantReason), LdValue.Null);
@@ -790,21 +787,21 @@ namespace LaunchDarkly.Sdk.Internal.Events
         private void CheckIdentifyEvent(LdValue t, IdentifyEvent ie, LdValue userJson)
         {
             Assert.Equal(LdValue.Of("identify"), t.Get("kind"));
-            Assert.Equal(LdValue.Of(ie.CreationDate), t.Get("creationDate"));
+            Assert.Equal(LdValue.Of(ie.CreationDate.Value), t.Get("creationDate"));
             Assert.Equal(userJson, t.Get("user"));
         }
 
         private void CheckIndexEvent(LdValue t, Event sourceEvent, LdValue userJson)
         {
             Assert.Equal(LdValue.Of("index"), t.Get("kind"));
-            Assert.Equal(LdValue.Of(sourceEvent.CreationDate), t.Get("creationDate"));
+            Assert.Equal(LdValue.Of(sourceEvent.CreationDate.Value), t.Get("creationDate"));
             Assert.Equal(userJson, t.Get("user"));
         }
 
         private void CheckFeatureEvent(LdValue t, FeatureRequestEvent fe, IFlagEventProperties flag, bool debug, LdValue userJson, EvaluationReason? reason = null)
         {
             Assert.Equal(LdValue.Of(debug ? "debug" : "feature"), t.Get("kind"));
-            Assert.Equal(LdValue.Of(fe.CreationDate), t.Get("creationDate"));
+            Assert.Equal(LdValue.Of(fe.CreationDate.Value), t.Get("creationDate"));
             Assert.Equal(LdValue.Of(flag.Key), t.Get("key"));
             Assert.Equal(LdValue.Of(flag.EventVersion), t.Get("version"));
             Assert.Equal(fe.Variation.HasValue ? LdValue.Of(fe.Variation.Value) : LdValue.Null, t.Get("variation"));
@@ -840,11 +837,11 @@ namespace LaunchDarkly.Sdk.Internal.Events
             Assert.Equal(LdValue.Of("summary"), t.Get("kind"));
         }
         
-        private void CheckSummaryEventDetails(LdValue o, long startDate, long endDate, params Action<LdValue>[] flagChecks)
+        private void CheckSummaryEventDetails(LdValue o, UnixMillisecondTime startDate, UnixMillisecondTime endDate, params Action<LdValue>[] flagChecks)
         {
             CheckSummaryEvent(o);
-            Assert.Equal(LdValue.Of(startDate), o.Get("startDate"));
-            Assert.Equal(LdValue.Of(endDate), o.Get("endDate"));
+            Assert.Equal(LdValue.Of(startDate.Value), o.Get("startDate"));
+            Assert.Equal(LdValue.Of(endDate.Value), o.Get("endDate"));
             var features = o.Get("features");
             Assert.Equal(flagChecks.Length, features.Count);
             foreach (var flagCheck in flagChecks)

@@ -6,14 +6,14 @@ namespace LaunchDarkly.Sdk.Internal.Events
 {
     public class EventUserTest
     {
-        static readonly SimpleConfiguration _baseConfig = new SimpleConfiguration();
+        static readonly EventsConfiguration _baseConfig = new EventsConfiguration();
 
-        static readonly SimpleConfiguration _configWithAllAttrsPrivate = new SimpleConfiguration
+        static readonly EventsConfiguration _configWithAllAttrsPrivate = new EventsConfiguration
         {
             AllAttributesPrivate = true
         };
 
-        static readonly SimpleConfiguration _configWithSomeAttrsPrivate = new SimpleConfiguration
+        static readonly EventsConfiguration _configWithSomeAttrsPrivate = new EventsConfiguration
         {
             PrivateAttributeNames = ImmutableHashSet.Create<string>("firstName", "bizzle")
         };

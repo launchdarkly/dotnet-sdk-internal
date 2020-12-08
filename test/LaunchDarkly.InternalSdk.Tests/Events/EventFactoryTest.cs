@@ -10,30 +10,25 @@ namespace LaunchDarkly.Sdk.Internal.Events
         private static readonly LdValue resultVal = LdValue.Of("result");
         private static readonly LdValue defaultVal = LdValue.Of("default");
 
-        private long TimeNow()
-        {
-            return Util.GetUnixTimestampMillis(DateTime.UtcNow);
-        }
-
         [Fact]
         public void EventFactoryGetsTimestamp()
         {
-            var time0 = TimeNow();
+            var time0 = UnixMillisecondTime.Now;
             var time1 = EventFactory.Default.GetTimestamp();
             var time2 = EventFactory.DefaultWithReasons.GetTimestamp();
-            Assert.NotEqual(0, time0);
-            Assert.True(time1 >= time0);
-            Assert.True(time2 >= time1);
+            Assert.NotEqual(0, time0.Value);
+            Assert.True(time1.Value >= time0.Value);
+            Assert.True(time2.Value >= time1.Value);
         }
 
         [Fact]
         public void FeatureEventHasBasicProperties()
         {
-            var time = TimeNow();
+            var time = UnixMillisecondTime.Now;
             var flag = new FlagEventPropertiesBuilder("flag-key").Version(100).Build();
             var result = new EvaluationDetail<LdValue>(resultVal, 1, EvaluationReason.FallthroughReason);
             var e = EventFactory.Default.NewFeatureRequestEvent(flag, user, result, defaultVal);
-            Assert.True(e.CreationDate >= time);
+            Assert.True(e.CreationDate.Value >= time.Value);
             Assert.Equal(flag.Key, e.Key);
             Assert.Same(user, e.User);
             Assert.Equal(flag.EventVersion, e.Version);
@@ -50,11 +45,11 @@ namespace LaunchDarkly.Sdk.Internal.Events
         public void FeatureEventUsesTrackAndDebugPropertiesFromFlag()
         {
             var flag = new FlagEventPropertiesBuilder("flag-key").Version(100)
-                .TrackEvents(true).DebugEventsUntilDate(1000).Build();
+                .TrackEvents(true).DebugEventsUntilDate(UnixMillisecondTime.OfMillis(1000)).Build();
             var result = new EvaluationDetail<LdValue>(resultVal, 1, EvaluationReason.FallthroughReason);
             var e = EventFactory.Default.NewFeatureRequestEvent(flag, user, result, defaultVal);
             Assert.True(e.TrackEvents);
-            Assert.Equal(1000, e.DebugEventsUntilDate);
+            Assert.Equal(UnixMillisecondTime.OfMillis(1000), e.DebugEventsUntilDate);
         }
 
         [Fact]
@@ -81,12 +76,12 @@ namespace LaunchDarkly.Sdk.Internal.Events
         [Fact]
         public void DefaultFeatureEventHasBasicProperties()
         {
-            var time = TimeNow();
+            var time = UnixMillisecondTime.Now;
             var flag = new FlagEventPropertiesBuilder("flag-key").Version(100).Build();
             var err = EvaluationErrorKind.EXCEPTION;
             var result = new EvaluationDetail<LdValue>(resultVal, 1, EvaluationReason.FallthroughReason);
             var e = EventFactory.Default.NewDefaultFeatureRequestEvent(flag, user, defaultVal, err);
-            Assert.True(e.CreationDate >= time);
+            Assert.True(e.CreationDate.Value >= time.Value);
             Assert.Equal(flag.Key, e.Key);
             Assert.Same(user, e.User);
             Assert.Equal(flag.EventVersion, e.Version);
@@ -103,12 +98,12 @@ namespace LaunchDarkly.Sdk.Internal.Events
         public void DefaultFeatureEventUsesTrackAndDebugPropertiesFromFlag()
         {
             var flag = new FlagEventPropertiesBuilder("flag-key").Version(100)
-                .TrackEvents(true).DebugEventsUntilDate(1000).Build();
+                .TrackEvents(true).DebugEventsUntilDate(UnixMillisecondTime.OfMillis(1000)).Build();
             var err = EvaluationErrorKind.EXCEPTION;
             var result = new EvaluationDetail<LdValue>(resultVal, 1, EvaluationReason.FallthroughReason);
             var e = EventFactory.Default.NewDefaultFeatureRequestEvent(flag, user, defaultVal, err);
             Assert.True(e.TrackEvents);
-            Assert.Equal(1000, e.DebugEventsUntilDate);
+            Assert.Equal(UnixMillisecondTime.OfMillis(1000), e.DebugEventsUntilDate);
         }
 
         [Fact]
@@ -123,10 +118,10 @@ namespace LaunchDarkly.Sdk.Internal.Events
         [Fact]
         public void UnknownFeatureEventHasBasicProperties()
         {
-            var time = TimeNow();
+            var time = UnixMillisecondTime.Now;
             var err = EvaluationErrorKind.FLAG_NOT_FOUND;
             var e = EventFactory.Default.NewUnknownFeatureRequestEvent("flag-key", user, defaultVal, err);
-            Assert.True(e.CreationDate >= time);
+            Assert.True(e.CreationDate.Value >= time.Value);
             Assert.Equal("flag-key", e.Key);
             Assert.Same(user, e.User);
             Assert.Null(e.Version);
@@ -150,12 +145,12 @@ namespace LaunchDarkly.Sdk.Internal.Events
         [Fact]
         public void PrerequisiteFeatureEventHasBasicProperties()
         {
-            var time = TimeNow();
+            var time = UnixMillisecondTime.Now;
             var parentFlag = new FlagEventPropertiesBuilder("flag-key").Version(100).Build();
             var flag = new FlagEventPropertiesBuilder("prereq-key").Version(100).Build();
             var result = new EvaluationDetail<LdValue>(resultVal, 1, EvaluationReason.FallthroughReason);
             var e = EventFactory.Default.NewPrerequisiteFeatureRequestEvent(flag, user, result, parentFlag);
-            Assert.True(e.CreationDate >= time);
+            Assert.True(e.CreationDate.Value >= time.Value);
             Assert.Equal("prereq-key", e.Key);
             Assert.Same(user, e.User);
             Assert.Equal(flag.EventVersion, e.Version);
@@ -194,10 +189,10 @@ namespace LaunchDarkly.Sdk.Internal.Events
         [Fact]
         public void CustomEventHasBasicProperties()
         {
-            var time = TimeNow();
+            var time = UnixMillisecondTime.Now;
             var data = LdValue.Of("hi");
             var e = EventFactory.Default.NewCustomEvent("yay", user, data, 1.5);
-            Assert.True(e.CreationDate >= time);
+            Assert.True(e.CreationDate.Value >= time.Value);
             Assert.Equal("yay", e.Key);
             Assert.Same(user, e.User);
             Assert.Equal(data, e.Data);
@@ -215,9 +210,9 @@ namespace LaunchDarkly.Sdk.Internal.Events
         [Fact]
         public void IdentifyEventHasBasicProperties()
         {
-            var time = TimeNow();
+            var time = UnixMillisecondTime.Now;
             var e = EventFactory.Default.NewIdentifyEvent(user);
-            Assert.True(e.CreationDate >= time);
+            Assert.True(e.CreationDate.Value >= time.Value);
             Assert.Same(user, e.User);
         }
     }

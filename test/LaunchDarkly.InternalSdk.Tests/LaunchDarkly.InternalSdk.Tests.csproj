@@ -3,6 +3,10 @@
     <TestFramework Condition="'$(TESTFRAMEWORK)' == ''">netcoreapp2.1</TestFramework>
     <TargetFramework>$(TESTFRAMEWORK)</TargetFramework>
     <AssemblyName>LaunchDarkly.InternalSdk.Tests</AssemblyName>
+    <RootNamespace>LaunchDarkly.Sdk.Internal</RootNamespace>
+    <Version>1.2.3</Version> <!-- we check for this value in tests -->
+    <ReleaseVersion>1.2.3</ReleaseVersion>
+    <SynchReleaseVersion>false</SynchReleaseVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -15,5 +19,8 @@
     <PackageReference Include="WireMock.Net" Version="1.1.7.0" />
     <PackageReference Include="xunit" Version="2.4.1" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.4.3" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Http\" />
   </ItemGroup>
 </Project>

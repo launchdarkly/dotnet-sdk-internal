@@ -1,10 +1,10 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using LaunchDarkly.EventSource;
 using LaunchDarkly.Sdk.Internal.Events;
+using LaunchDarkly.Sdk.Internal.Http;
 using Moq;
 using Xunit;
 
@@ -14,8 +14,10 @@ namespace LaunchDarkly.Sdk.Internal.Stream
 {
     public class StreamManagerTest
     {
-        private static string SdkKey = "sdk_key";
         private static Uri StreamUri = new Uri("http://test");
+
+        private static HttpProperties FakeHttpProperties =
+            HttpProperties.Default.WithHeader("header", "value");
 
         readonly Mock<IEventSource> _mockEventSource;
         readonly IEventSource _eventSource;
@@ -24,7 +26,6 @@ namespace LaunchDarkly.Sdk.Internal.Stream
         readonly Mock<IStreamProcessor> _mockStreamProcessor;
         readonly IStreamProcessor _streamProcessor;
         readonly StreamProperties _streamProperties;
-        readonly SimpleConfiguration _config;
         Mock<IDiagnosticStore> _mockDiagnosticStore;
         IDiagnosticStore _diagnosticStore;
 
@@ -34,10 +35,6 @@ namespace LaunchDarkly.Sdk.Internal.Stream
             _mockEventSource.Setup(es => es.StartAsync()).Returns(Task.CompletedTask).Callback(() => _esStartedReady.Signal());
             _eventSource = _mockEventSource.Object;
             _eventSourceCreator = new StubEventSourceCreator(_eventSource);
-            _config = new SimpleConfiguration
-            {
-                SdkKey = SdkKey
-            };
             _mockStreamProcessor = new Mock<IStreamProcessor>();
             _streamProcessor = _mockStreamProcessor.Object;
             _streamProperties = new StreamProperties(StreamUri, HttpMethod.Get, null);
@@ -45,9 +42,15 @@ namespace LaunchDarkly.Sdk.Internal.Stream
 
         private StreamManager CreateManager()
         {
-            return new StreamManager(_streamProcessor, _streamProperties, _config,
-                SimpleClientEnvironment.Instance, _eventSourceCreator.Create, _diagnosticStore,
-                NullLogger);
+            return new StreamManager(
+                _streamProcessor,
+                _streamProperties,
+                FakeHttpProperties,
+                TimeSpan.FromSeconds(1),
+                _eventSourceCreator.Create,
+                _diagnosticStore,
+                NullLogger
+                );
         }
 
         [Fact]
@@ -61,97 +64,15 @@ namespace LaunchDarkly.Sdk.Internal.Stream
         }
 
         [Fact]
-        public void HeadersHaveAuthorization()
+        public void HttpPropertiesArePassedToEventSourceFactory()
         {
             using (StreamManager sm = CreateManager())
             {
                 sm.Start();
-                Assert.Equal(SdkKey, _eventSourceCreator.ReceivedHeaders["Authorization"]);
-            }
-        }
-
-        [Fact]
-        public void HeadersHaveUserAgent()
-        {
-            using (StreamManager sm = CreateManager())
-            {
-                sm.Start();
-                Assert.Equal(SimpleClientEnvironment.Instance.UserAgentType + "/" +
-                    SimpleClientEnvironment.Instance.VersionString, _eventSourceCreator.ReceivedHeaders["User-Agent"]);
-            }
-        }
-
-        [Fact]
-        public void HeadersHaveAccept()
-        {
-            using (StreamManager sm = CreateManager())
-            {
-                sm.Start();
-                Assert.Equal("text/event-stream", _eventSourceCreator.ReceivedHeaders["Accept"]);
-            }
-        }
-
-        [Fact]
-        public void HeadersDontIncludeWrapperWhenNotSet()
-        {
-            var config = new SimpleConfiguration
-            {
-                SdkKey = SdkKey
-            };
-            using (StreamManager sm = new StreamManager(_streamProcessor, _streamProperties, config,
-                SimpleClientEnvironment.Instance, _eventSourceCreator.Create, null, NullLogger))
-            {
-                sm.Start();
-                Assert.False(_eventSourceCreator.ReceivedHeaders.ContainsKey("X-LaunchDarkly-Wrapper"));
-            }
-        }
-
-        [Fact]
-        public void HeadersHaveWrapperNameField()
-        {
-            var config = new SimpleConfiguration
-            {
-                SdkKey = SdkKey,
-                WrapperName = "Xamarin",
-            };
-            using (StreamManager sm = new StreamManager(_streamProcessor, _streamProperties, config,
-                SimpleClientEnvironment.Instance, _eventSourceCreator.Create, null, NullLogger))
-            {
-                sm.Start();
-                Assert.Equal("Xamarin", _eventSourceCreator.ReceivedHeaders["X-LaunchDarkly-Wrapper"]);
-            }
-        }
-
-        [Fact]
-        public void HeadersIgnoreWrapperVersionIfNameNotSetField()
-        {
-            var config = new SimpleConfiguration
-            {
-                SdkKey = SdkKey,
-                WrapperVersion = "1.0.0"
-            };
-            using (StreamManager sm = new StreamManager(_streamProcessor, _streamProperties, config,
-                SimpleClientEnvironment.Instance, _eventSourceCreator.Create, null, NullLogger))
-            {
-                sm.Start();
-                Assert.False(_eventSourceCreator.ReceivedHeaders.ContainsKey("X-LaunchDarkly-Wrapper"));
-            }
-        }
-
-        [Fact]
-        public void HeadersHaveCombinedWrapperField()
-        {
-            var config = new SimpleConfiguration
-            {
-                SdkKey = SdkKey,
-                WrapperName = "Xamarin",
-                WrapperVersion = "1.0.0"
-            };
-            using (StreamManager sm = new StreamManager(_streamProcessor, _streamProperties, config,
-                SimpleClientEnvironment.Instance, _eventSourceCreator.Create, null, NullLogger))
-            {
-                sm.Start();
-                Assert.Equal("Xamarin/1.0.0", _eventSourceCreator.ReceivedHeaders["X-LaunchDarkly-Wrapper"]);
+                var expectedHttpProperties =
+                    FakeHttpProperties.WithHeader("Accept", "text/event-stream");
+                Assert.Equal(expectedHttpProperties.BaseHeaders,
+                    _eventSourceCreator.ReceivedHttpProperties.BaseHeaders);
             }
         }
 
@@ -318,7 +239,7 @@ namespace LaunchDarkly.Sdk.Internal.Stream
     internal class StubEventSourceCreator
     {
         public StreamProperties ReceivedProperties { get; private set; }
-        public IDictionary<string, string> ReceivedHeaders { get; private set; }
+        public HttpProperties ReceivedHttpProperties { get; private set; }
         private readonly IEventSource _eventSource;
 
         public StubEventSourceCreator(IEventSource es)
@@ -326,10 +247,10 @@ namespace LaunchDarkly.Sdk.Internal.Stream
             _eventSource = es;
         }
 
-        public IEventSource Create(StreamProperties sp, IDictionary<string, string> headers)
+        public IEventSource Create(StreamProperties sp, HttpProperties hp)
         {
             ReceivedProperties = sp;
-            ReceivedHeaders = headers;
+            ReceivedHttpProperties = hp;
             return _eventSource;
         }
     }

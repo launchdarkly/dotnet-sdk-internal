@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <Version>1.0.0-alpha.1</Version>
+    <Version>1.0.0-alpha.2</Version>
     <TargetFrameworks>netstandard2.0;net452</TargetFrameworks>
     <DebugType>portable</DebugType>
     <AssemblyName>LaunchDarkly.InternalSdk</AssemblyName>
@@ -17,13 +17,16 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="LaunchDarkly.CommonSdk" Version="5.0.0-beta.5" />
+    <PackageReference Include="LaunchDarkly.CommonSdk" Version="5.0.0-beta.6" />
     <PackageReference Include="LaunchDarkly.EventSource" Version="4.0.0-alpha.1" />
     <PackageReference Include="LaunchDarkly.Logging" Version="1.0.0-alpha.1" />
     <PackageReference Include="System.Collections.Immutable" Version="1.7.1" />
     <PackageReference Include="Newtonsoft.Json" Version="9.0.1" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Http\" />
+  </ItemGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
     <AssemblyOriginatorKeyFile>../../LaunchDarkly.InternalSdk.snk</AssemblyOriginatorKeyFile>
     <SignAssembly>true</SignAssembly>

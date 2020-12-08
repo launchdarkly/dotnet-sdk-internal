@@ -42,8 +42,8 @@ namespace LaunchDarkly.Sdk.Internal.Events
     {
         public Dictionary<EventsCounterKey, EventsCounterValue> Counters { get; } =
             new Dictionary<EventsCounterKey, EventsCounterValue>();
-        public long StartDate { get; private set; }
-        public long EndDate { get; private set; }
+        public UnixMillisecondTime StartDate { get; private set; }
+        public UnixMillisecondTime EndDate { get; private set; }
         public bool Empty
         {
             get  
@@ -65,13 +65,13 @@ namespace LaunchDarkly.Sdk.Internal.Events
             }
         }
 
-        public void NoteTimestamp(long timestamp)
+        public void NoteTimestamp(UnixMillisecondTime timestamp)
         {
-            if (StartDate == 0 || timestamp < StartDate)
+            if (StartDate.Value == 0 || timestamp.Value < StartDate.Value)
             {
                 StartDate = timestamp;
             }
-            if (timestamp > EndDate)
+            if (timestamp.Value > EndDate.Value)
             {
                 EndDate = timestamp;
             }
@@ -104,7 +104,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         // Required because we use this class as a dictionary key
         public override int GetHashCode()
         {
-            return Util.Hash().With(Key).With(Variation).With(Version).Value;
+            return HashCodeBuilder.New().With(Key).With(Variation).With(Version).Value;
         }
     }
 
@@ -139,7 +139,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         // Used only in tests
         public override int GetHashCode()
         {
-            return Util.Hash().With(Count).With(FlagValue).With(Default).Value;
+            return HashCodeBuilder.New().With(Count).With(FlagValue).With(Default).Value;
         }
 
         // Used only in tests

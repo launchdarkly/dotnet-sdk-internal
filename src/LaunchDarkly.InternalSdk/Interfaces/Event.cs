@@ -20,14 +20,14 @@ namespace LaunchDarkly.Sdk.Interfaces
         /// <summary>
         /// Date/timestamp of the event.
         /// </summary>
-        public long CreationDate { get; private set; }
+        public UnixMillisecondTime CreationDate { get; private set; }
 
         /// <summary>
         /// The unique key of the feature flag involved in the event.
         /// </summary>
         public string Key { get; private set; }
         
-        internal Event(long creationDate, string key, User user)
+        internal Event(UnixMillisecondTime creationDate, string key, User user)
         {
             CreationDate = creationDate;
             Key = key;
@@ -78,7 +78,7 @@ namespace LaunchDarkly.Sdk.Interfaces
         /// <summary>
         /// If set, debug events are being generated until this date/time.
         /// </summary>
-        public long? DebugEventsUntilDate { get; private set; }
+        public UnixMillisecondTime? DebugEventsUntilDate { get; private set; }
 
         /// <summary>
         /// If set, this is a debug event.
@@ -90,9 +90,9 @@ namespace LaunchDarkly.Sdk.Interfaces
         /// </summary>
         public EvaluationReason? Reason { get; private set; }
 
-        internal FeatureRequestEvent(long creationDate, string key, User user, int? variation,
+        internal FeatureRequestEvent(UnixMillisecondTime creationDate, string key, User user, int? variation,
             LdValue value, LdValue defaultValue, int? version, string prereqOf,
-            bool trackEvents, long? debugEventsUntilDate,
+            bool trackEvents, UnixMillisecondTime? debugEventsUntilDate,
             bool debug, EvaluationReason? reason) : base(creationDate, key, user)
         {
             Variation = variation;
@@ -127,7 +127,7 @@ namespace LaunchDarkly.Sdk.Interfaces
         /// </summary>
         public double? MetricValue { get; private set; }
 
-        internal CustomEvent(long creationDate, string key, User user, LdValue data, double? metricValue) :
+        internal CustomEvent(UnixMillisecondTime creationDate, string key, User user, LdValue data, double? metricValue) :
             base(creationDate, key, user)
         {
             Data = data;
@@ -145,7 +145,7 @@ namespace LaunchDarkly.Sdk.Interfaces
     /// </remarks>
     public class IdentifyEvent : Event
     {
-        internal IdentifyEvent(long creationDate, User user) :
+        internal IdentifyEvent(UnixMillisecondTime creationDate, User user) :
             base(creationDate, user == null ? null : user.Key, user)
         {
         }
@@ -161,7 +161,7 @@ namespace LaunchDarkly.Sdk.Interfaces
     /// </remarks>
     internal class IndexEvent : Event
     {
-        internal IndexEvent(long creationDate, User user) :
+        internal IndexEvent(UnixMillisecondTime creationDate, User user) :
             base(creationDate, user.Key, user)
         { }
     }
