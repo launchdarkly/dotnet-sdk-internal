@@ -3,7 +3,7 @@ using Newtonsoft.Json;
 
 namespace LaunchDarkly.Sdk.Internal.Events
 {
-    public class DiagnosticId
+    public sealed class DiagnosticId
     {
         [JsonProperty(PropertyName = "diagnosticId", NullValueHandling = NullValueHandling.Ignore)]
         public readonly Guid Id;

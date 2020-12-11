@@ -4,7 +4,7 @@ namespace LaunchDarkly.Sdk.Internal.Http
     /// <summary>
     /// Helper methods to provide standardized HTTP error-handling behavior in the SDKs.
     /// </summary>
-    public class HttpErrors
+    public static class HttpErrors
     {
         /// <summary>
         /// Returns true if this type of error could be expected to eventually resolve itself,
