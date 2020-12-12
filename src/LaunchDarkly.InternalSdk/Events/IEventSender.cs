@@ -1,16 +1,15 @@
 using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Net.Http;
-using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
-using LaunchDarkly.Sdk.Interfaces;
-using LaunchDarkly.Sdk.Internal.Helpers;
 
 namespace LaunchDarkly.Sdk.Internal.Events
 {
+    /// <summary>
+    /// An abstraction of the mechanism for sending event JSON data.
+    /// </summary>
+    /// <remarks>
+    /// The only implementation the SDKs use is <see cref="DefaultEventSender"/>, but the interface
+    /// allows us to use a test fixture in tests.
+    /// </remarks>
     public interface IEventSender : IDisposable
     {
         Task<EventSenderResult> SendEventDataAsync(EventDataKind kind, string data, int eventCount);

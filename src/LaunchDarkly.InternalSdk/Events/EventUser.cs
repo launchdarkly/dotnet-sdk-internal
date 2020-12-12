@@ -1,12 +1,11 @@
 using System.Collections.Immutable;
-using LaunchDarkly.Sdk.Interfaces;
 
 namespace LaunchDarkly.Sdk.Internal.Events
 {
     /// <summary>
     /// Used internally to represent user data that is being serialized in an <see cref="Event"/>.
     /// </summary>
-    public struct EventUser
+    internal struct EventUser
     {
         public string Key { get; internal set; }
         public string Secondary { get; internal set; }
@@ -28,7 +27,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         }
     }
 
-    public struct EventUserBuilder
+    internal struct EventUserBuilder
     {
         private EventsConfiguration _config;
         private User _user;

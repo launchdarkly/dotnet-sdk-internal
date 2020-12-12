@@ -9,6 +9,13 @@ using LaunchDarkly.Sdk.Internal.Http;
 
 namespace LaunchDarkly.Sdk.Internal.Events
 {
+    /// <summary>
+    /// The default implementation of delivering JSON data to an LaunchDarkly event endpoint.
+    /// </summary>
+    /// <remarks>
+    /// This is the only implementation that is used by the SDKs. It is abstracted out with an
+    /// interface for the sake of testability.
+    /// </remarks>
     public sealed class DefaultEventSender : IEventSender
     {
         public static readonly TimeSpan DefaultRetryInterval = TimeSpan.FromSeconds(1);
@@ -39,7 +46,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             _timeout = httpProperties.ConnectTimeout.Add(httpProperties.ReadTimeout);
         }
 
-        void IDisposable.Dispose()
+        public void Dispose()
         {
             Dispose(true);
             GC.SuppressFinalize(this);

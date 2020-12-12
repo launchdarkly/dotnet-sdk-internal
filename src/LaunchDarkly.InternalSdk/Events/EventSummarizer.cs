@@ -1,11 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-using LaunchDarkly.Sdk.Interfaces;
-using LaunchDarkly.Sdk.Internal.Helpers;
 
 namespace LaunchDarkly.Sdk.Internal.Events
 {
-    public sealed class EventSummarizer
+    internal sealed class EventSummarizer
     {
         private EventSummary _eventsState;
 
@@ -15,13 +13,17 @@ namespace LaunchDarkly.Sdk.Internal.Events
         }
 
         // Adds this event to our counters, if it is a type of event we need to count.
-        public void SummarizeEvent(Event e)
+        public void SummarizeEvent(
+            UnixMillisecondTime timestamp,
+            string flagKey,
+            int? flagVersion,
+            int? variation,
+            LdValue value,
+            LdValue defaultValue
+            )
         {
-            if (e is FeatureRequestEvent fe)
-            {
-                _eventsState.IncrementCounter(fe.Key, fe.Variation, fe.Version, fe.Value, fe.Default);
-                _eventsState.NoteTimestamp(fe.CreationDate);
-            }
+            _eventsState.IncrementCounter(flagKey, variation, flagVersion, value, defaultValue);
+            _eventsState.NoteTimestamp(timestamp);
         }
 
         // Returns the current summarized event data.
@@ -38,7 +40,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         }
     }
 
-    public sealed class EventSummary
+    internal sealed class EventSummary
     {
         public Dictionary<EventsCounterKey, EventsCounterValue> Counters { get; } =
             new Dictionary<EventsCounterKey, EventsCounterValue>();
@@ -78,7 +80,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         }
     }
 
-    public sealed class EventsCounterKey
+    internal sealed class EventsCounterKey
     {
         public readonly string Key;
         public readonly int? Version;
@@ -108,7 +110,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         }
     }
 
-    public sealed class EventsCounterValue
+    internal sealed class EventsCounterValue
     {
         public int Count;
         public readonly LdValue FlagValue;

@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using LaunchDarkly.Sdk.Interfaces;
 using Newtonsoft.Json;
 using Moq;
 using Xunit;
@@ -13,16 +12,48 @@ using static LaunchDarkly.Sdk.TestUtil;
 
 namespace LaunchDarkly.Sdk.Internal.Events
 {
-    public class DefaultEventProcessorTest
+    public class EventProcessorTest
     {
+        private static readonly UnixMillisecondTime _fixedTimestamp = UnixMillisecondTime.OfMillis(10000);
+
+        private static readonly User _user = User.Builder("userKey").Name("Red").Build();
+
         private static readonly EvaluationReason _irrelevantReason = EvaluationReason.OffReason;
-        
+
+        private static TestFlagProperties BasicFlag => new TestFlagProperties
+        {
+            Key = "flagkey",
+            Version = 11
+        };
+
+        private static TestFlagProperties BasicFlagWithTracking => new TestFlagProperties
+        {
+            Key = "flagkey",
+            Version = 11,
+            TrackEvents = true
+        };
+
+        private static TestEvalProperties BasicEval => new TestEvalProperties
+        {
+            Timestamp = _fixedTimestamp,
+            User = _user,
+            Variation = 1,
+            Value = LdValue.Of("value")
+        };
+
+        private static TestCustomEventProperties BasicCustom => new TestCustomEventProperties
+        {
+            Timestamp = _fixedTimestamp,
+            User = _user,
+            Key = "eventkey",
+            Data = LdValue.Of(3)
+        };
+
         private EventsConfiguration _config = new EventsConfiguration();
-        private readonly User _user = User.Builder("userKey").Name("Red").Build();
         private readonly LdValue _userJson = LdValue.Parse("{\"key\":\"userKey\",\"name\":\"Red\"}");
         private readonly LdValue _scrubbedUserJson = LdValue.Parse("{\"key\":\"userKey\",\"privateAttrs\":[\"name\"]}");
 
-        public DefaultEventProcessorTest()
+        public EventProcessorTest()
         {
             _config.EventCapacity = 100;
             _config.EventFlushInterval = TimeSpan.FromMilliseconds(-1);
@@ -51,19 +82,31 @@ namespace LaunchDarkly.Sdk.Internal.Events
             return mockDiagnosticStore;
         }
 
-        private DefaultEventProcessor MakeProcessor(EventsConfiguration config, Mock<IEventSender> mockSender)
+        private EventProcessor MakeProcessor(EventsConfiguration config, Mock<IEventSender> mockSender)
         {
             return MakeProcessor(config, mockSender, null, null, null);
         }
 
-        private DefaultEventProcessor MakeProcessor(EventsConfiguration config, Mock<IEventSender> mockSender,
+        private EventProcessor MakeProcessor(EventsConfiguration config, Mock<IEventSender> mockSender,
             IDiagnosticStore diagnosticStore, IDiagnosticDisabler diagnosticDisabler, CountdownEvent diagnosticCountdown)
         {
-            return new DefaultEventProcessor(config, mockSender.Object, new TestUserDeduplicator(),
+            return new EventProcessor(config, mockSender.Object, new TestUserDeduplicator(),
                 diagnosticStore, diagnosticDisabler, NullLogger, () => { diagnosticCountdown.Signal(); });
         }
 
-        private void FlushAndWait(DefaultEventProcessor ep)
+        private void RecordEval(EventProcessor ep, TestFlagProperties f, TestEvalProperties e)
+        {
+            ep.RecordEvaluationEvent(e.Timestamp, e.User, f.Key, f.Version,
+                e.Variation, e.Value, e.DefaultValue, e.Reason, e.PrereqOf,
+                f.TrackEvents, f.DebugEventsUntilDate);
+        }
+
+        private void RecordCustom(EventProcessor ep, TestCustomEventProperties e)
+        {
+            ep.RecordCustomEvent(e.Timestamp, e.User, e.Key, e.Data, e.MetricValue);
+        }
+
+        private void FlushAndWait(EventProcessor ep)
         {
             ep.Flush();
             ep.WaitUntilInactive();
@@ -77,12 +120,11 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
             using (var ep = MakeProcessor(_config, mockSender))
             {
-                IdentifyEvent e = EventFactory.Default.NewIdentifyEvent(_user);
-                ep.SendEvent(e);
+                ep.RecordIdentifyEvent(_fixedTimestamp, _user);
                 FlushAndWait(ep);
 
                 Assert.Collection(captured.Events,
-                    item => CheckIdentifyEvent(item, e, _userJson));
+                    item => CheckIdentifyEvent(item, _fixedTimestamp, _userJson));
             }
         }
         
@@ -96,12 +138,11 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
             using (var ep = MakeProcessor(_config, mockSender))
             {
-                IdentifyEvent e = EventFactory.Default.NewIdentifyEvent(_user);
-                ep.SendEvent(e);
+                ep.RecordIdentifyEvent(_fixedTimestamp, _user);
                 FlushAndWait(ep);
 
                 Assert.Collection(captured.Events,
-                    item => CheckIdentifyEvent(item, e, _scrubbedUserJson));
+                    item => CheckIdentifyEvent(item, _fixedTimestamp, _scrubbedUserJson));
             }
         }
 
@@ -113,12 +154,11 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
             using (var ep = MakeProcessor(_config, mockSender))
             {
-                IdentifyEvent e = EventFactory.Default.NewIdentifyEvent(null);
-                ep.SendEvent(e);
+                ep.RecordIdentifyEvent(_fixedTimestamp, null);
                 FlushAndWait(ep);
 
                 Assert.Collection(captured.Events,
-                    item => CheckIdentifyEvent(item, e, LdValue.Null));
+                    item => CheckIdentifyEvent(item, _fixedTimestamp, LdValue.Null));
             }
         }
 
@@ -130,15 +170,12 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
             using (var ep = MakeProcessor(_config, mockSender))
             {
-                IFlagEventProperties flag = new FlagEventPropertiesBuilder("flagkey").Version(11).TrackEvents(true).Build();
-                FeatureRequestEvent fe = EventFactory.Default.NewFeatureRequestEvent(flag, _user,
-                    new EvaluationDetail<LdValue>(LdValue.Of("value"), 1, _irrelevantReason), LdValue.Null);
-                ep.SendEvent(fe);
+                RecordEval(ep, BasicFlagWithTracking, BasicEval);
                 FlushAndWait(ep);
 
                 Assert.Collection(captured.Events,
-                    item => CheckIndexEvent(item, fe, _userJson),
-                    item => CheckFeatureEvent(item, fe, flag, false, LdValue.Null),
+                    item => CheckIndexEvent(item, BasicEval.Timestamp, _userJson),
+                    item => CheckFeatureEvent(item, BasicFlagWithTracking, BasicEval, LdValue.Null),
                     item => CheckSummaryEvent(item));
             }
         }
@@ -153,15 +190,12 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
             using (var ep = MakeProcessor(_config, mockSender))
             {
-                IFlagEventProperties flag = new FlagEventPropertiesBuilder("flagkey").Version(11).TrackEvents(true).Build();
-                FeatureRequestEvent fe = EventFactory.Default.NewFeatureRequestEvent(flag, _user,
-                    new EvaluationDetail<LdValue>(LdValue.Of("value"), 1, _irrelevantReason), LdValue.Null);
-                ep.SendEvent(fe);
+                RecordEval(ep, BasicFlagWithTracking, BasicEval);
                 FlushAndWait(ep);
 
                 Assert.Collection(captured.Events,
-                    item => CheckIndexEvent(item, fe, _scrubbedUserJson),
-                    item => CheckFeatureEvent(item, fe, flag, false, LdValue.Null),
+                    item => CheckIndexEvent(item, BasicEval.Timestamp, _scrubbedUserJson),
+                    item => CheckFeatureEvent(item, BasicFlagWithTracking, BasicEval, LdValue.Null),
                     item => CheckSummaryEvent(item));
             }
         }
@@ -176,14 +210,11 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
             using (var ep = MakeProcessor(_config, mockSender))
             {
-                IFlagEventProperties flag = new FlagEventPropertiesBuilder("flagkey").Version(11).TrackEvents(true).Build();
-                FeatureRequestEvent fe = EventFactory.Default.NewFeatureRequestEvent(flag, _user,
-                    new EvaluationDetail<LdValue>(LdValue.Of("value"), 1, _irrelevantReason), LdValue.Null);
-                ep.SendEvent(fe);
+                RecordEval(ep, BasicFlagWithTracking, BasicEval);
                 FlushAndWait(ep);
 
                 Assert.Collection(captured.Events,
-                    item => CheckFeatureEvent(item, fe, flag, false, _userJson),
+                    item => CheckFeatureEvent(item, BasicFlagWithTracking, BasicEval, _userJson),
                     item => CheckSummaryEvent(item));
             }
         }
@@ -198,7 +229,6 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
             using (var ep = MakeProcessor(_config, mockSender))
             {
-                IFlagEventProperties flag = new FlagEventPropertiesBuilder("flagkey").Version(11).TrackEvents(true).Build();
                 var reasons = new EvaluationReason[]
                 {
                     _irrelevantReason,
@@ -212,13 +242,13 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 {
                     captured.Events.Clear();
 
-                    FeatureRequestEvent fe = EventFactory.DefaultWithReasons.NewFeatureRequestEvent(flag, _user,
-                         new EvaluationDetail<LdValue>(LdValue.Of("value"), 1, reason), LdValue.Null);
-                    ep.SendEvent(fe);
+                    var eval = BasicEval;
+                    eval.Reason = reason;
+                    RecordEval(ep, BasicFlagWithTracking, eval);
                     FlushAndWait(ep);
 
                     Assert.Collection(captured.Events,
-                        item => CheckFeatureEvent(item, fe, flag, false, _userJson, reason),
+                        item => CheckFeatureEvent(item, BasicFlagWithTracking, eval, _userJson),
                         item => CheckSummaryEvent(item));
                 }
             }
@@ -235,14 +265,11 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
             using (var ep = MakeProcessor(_config, mockSender))
             {
-                IFlagEventProperties flag = new FlagEventPropertiesBuilder("flagkey").Version(11).TrackEvents(true).Build();
-                FeatureRequestEvent fe = EventFactory.Default.NewFeatureRequestEvent(flag, _user,
-                    new EvaluationDetail<LdValue>(LdValue.Of("value"), 1, _irrelevantReason), LdValue.Null);
-                ep.SendEvent(fe);
+                RecordEval(ep, BasicFlagWithTracking, BasicEval);
                 FlushAndWait(ep);
 
                 Assert.Collection(captured.Events,
-                    item => CheckFeatureEvent(item, fe, flag, false, _scrubbedUserJson),
+                    item => CheckFeatureEvent(item, BasicFlagWithTracking, BasicEval, _scrubbedUserJson),
                     item => CheckSummaryEvent(item));
             }
         }
@@ -255,14 +282,13 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
             using (var ep = MakeProcessor(_config, mockSender))
             {
-                IFlagEventProperties flag = new FlagEventPropertiesBuilder("flagkey").Version(11).TrackEvents(true).Build();
-                FeatureRequestEvent fe = EventFactory.Default.NewFeatureRequestEvent(flag, null,
-                    new EvaluationDetail<LdValue>(LdValue.Of("value"), 1, _irrelevantReason), LdValue.Null);
-                ep.SendEvent(fe);
+                var eval = BasicEval;
+                eval.User = null;
+                RecordEval(ep, BasicFlagWithTracking, eval);
                 FlushAndWait(ep);
 
                 Assert.Collection(captured.Events,
-                    item => CheckFeatureEvent(item, fe, flag, false, LdValue.Null),
+                    item => CheckFeatureEvent(item, BasicFlagWithTracking, eval, LdValue.Null),
                     item => CheckSummaryEvent(item));
             }
         }
@@ -277,14 +303,11 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
             using (var ep = MakeProcessor(_config, mockSender))
             {
-                IFlagEventProperties flag = new FlagEventPropertiesBuilder("flagkey").Version(11).TrackEvents(false).Build();
-                FeatureRequestEvent fe = EventFactory.Default.NewFeatureRequestEvent(flag, _user,
-                    new EvaluationDetail<LdValue>(LdValue.Of("value"), 1, _irrelevantReason), LdValue.Null);
-                ep.SendEvent(fe);
+                RecordEval(ep, BasicFlag, BasicEval);
                 FlushAndWait(ep);
 
                 Assert.Collection(captured.Events,
-                    item => CheckIndexEvent(item, fe, _userJson),
+                    item => CheckIndexEvent(item, BasicEval.Timestamp, _userJson),
                     item => CheckSummaryEvent(item));
             }
         }
@@ -297,16 +320,14 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
             using (var ep = MakeProcessor(_config, mockSender))
             {
-                var futureTime = UnixMillisecondTime.Now.PlusMillis(1000000);
-                IFlagEventProperties flag = new FlagEventPropertiesBuilder("flagkey").Version(11).DebugEventsUntilDate(futureTime).Build();
-                FeatureRequestEvent fe = EventFactory.Default.NewFeatureRequestEvent(flag, _user,
-                    new EvaluationDetail<LdValue>(LdValue.Of("value"), 1, _irrelevantReason), LdValue.Null);
-                ep.SendEvent(fe);
+                var flag = BasicFlag;
+                flag.DebugEventsUntilDate = UnixMillisecondTime.Now.PlusMillis(1000000);
+                RecordEval(ep, flag, BasicEval);
                 FlushAndWait(ep);
 
                 Assert.Collection(captured.Events,
-                    item => CheckIndexEvent(item, fe, _userJson),
-                    item => CheckFeatureEvent(item, fe, flag, true, _userJson),
+                    item => CheckIndexEvent(item, BasicEval.Timestamp, _userJson),
+                    item => CheckDebugEvent(item, flag, BasicEval, _userJson),
                     item => CheckSummaryEvent(item));
             }
         }
@@ -319,18 +340,15 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
             using (var ep = MakeProcessor(_config, mockSender))
             {
-                var futureTime = UnixMillisecondTime.Now.PlusMillis(1000000);
-                IFlagEventProperties flag = new FlagEventPropertiesBuilder("flagkey").Version(11).TrackEvents(true)
-                    .DebugEventsUntilDate(futureTime).Build();
-                FeatureRequestEvent fe = EventFactory.Default.NewFeatureRequestEvent(flag, _user,
-                    new EvaluationDetail<LdValue>(LdValue.Of("value"), 1, _irrelevantReason), LdValue.Null);
-                ep.SendEvent(fe);
+                var flag = BasicFlagWithTracking;
+                flag.DebugEventsUntilDate = UnixMillisecondTime.Now.PlusMillis(1000000);
+                RecordEval(ep, flag, BasicEval);
                 FlushAndWait(ep);
 
                 Assert.Collection(captured.Events,
-                    item => CheckIndexEvent(item, fe, _userJson),
-                    item => CheckFeatureEvent(item, fe, flag, false, LdValue.Null),
-                    item => CheckFeatureEvent(item, fe, flag, true, _userJson),
+                    item => CheckIndexEvent(item, BasicEval.Timestamp, _userJson),
+                    item => CheckFeatureEvent(item, flag, BasicEval, LdValue.Null),
+                    item => CheckDebugEvent(item, flag, BasicEval, _userJson),
                     item => CheckSummaryEvent(item));
             }
         }
@@ -348,22 +366,20 @@ namespace LaunchDarkly.Sdk.Internal.Events
             using (var ep = MakeProcessor(_config, mockSender))
             {
                 // Send and flush an event we don't care about, just to set the last server time
-                ep.SendEvent(EventFactory.Default.NewIdentifyEvent(User.WithKey("otherUser")));
+                ep.RecordIdentifyEvent(_fixedTimestamp, User.WithKey("otherUser"));
                 FlushAndWait(ep);
                 captured.Events.Clear();
 
                 // Now send an event with debug mode on, with a "debug until" time that is further in
                 // the future than the server time, but in the past compared to the client.
-                var debugUntil = UnixMillisecondTime.FromDateTime(serverTime).PlusMillis(1000);
-                IFlagEventProperties flag = new FlagEventPropertiesBuilder("flagkey").Version(11).DebugEventsUntilDate(debugUntil).Build();
-                FeatureRequestEvent fe = EventFactory.Default.NewFeatureRequestEvent(flag, _user,
-                    new EvaluationDetail<LdValue>(LdValue.Of("value"), 1, _irrelevantReason), LdValue.Null);
-                ep.SendEvent(fe);
+                var flag = BasicFlag;
+                flag.DebugEventsUntilDate = UnixMillisecondTime.FromDateTime(serverTime).PlusMillis(1000);
+                RecordEval(ep, flag, BasicEval);
                 FlushAndWait(ep);
 
                 // Should get a summary event only, not a full feature event
                 Assert.Collection(captured.Events,
-                    item => CheckIndexEvent(item, fe, _userJson),
+                    item => CheckIndexEvent(item, BasicEval.Timestamp, _userJson),
                     item => CheckSummaryEvent(item));
             }
         }
@@ -381,22 +397,20 @@ namespace LaunchDarkly.Sdk.Internal.Events
             using (var ep = MakeProcessor(_config, mockSender))
             {
                 // Send and flush an event we don't care about, just to set the last server time
-                ep.SendEvent(EventFactory.Default.NewIdentifyEvent(User.WithKey("otherUser")));
+                ep.RecordIdentifyEvent(_fixedTimestamp, User.WithKey("otherUser"));
                 FlushAndWait(ep);
                 captured.Events.Clear();
 
                 // Now send an event with debug mode on, with a "debug until" time that is further in
                 // the future than the client time, but in the past compared to the server.
-                var debugUntil = UnixMillisecondTime.FromDateTime(serverTime).PlusMillis(-1000);
-                IFlagEventProperties flag = new FlagEventPropertiesBuilder("flagkey").Version(11).DebugEventsUntilDate(debugUntil).Build();
-                FeatureRequestEvent fe = EventFactory.Default.NewFeatureRequestEvent(flag, _user,
-                    new EvaluationDetail<LdValue>(LdValue.Of("value"), 1, _irrelevantReason), LdValue.Null);
-                ep.SendEvent(fe);
+                var flag = BasicFlag;
+                flag.DebugEventsUntilDate = UnixMillisecondTime.FromDateTime(serverTime).PlusMillis(-1000);
+                RecordEval(ep, flag, BasicEval);
                 FlushAndWait(ep);
 
                 // Should get a summary event only, not a full feature event
                 Assert.Collection(captured.Events,
-                    item => CheckIndexEvent(item, fe, _userJson),
+                    item => CheckIndexEvent(item, BasicEval.Timestamp, _userJson),
                     item => CheckSummaryEvent(item));
             }
         }
@@ -409,22 +423,18 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
             using (var ep = MakeProcessor(_config, mockSender))
             {
-                IFlagEventProperties flag1 = new FlagEventPropertiesBuilder("flagkey1").Version(11).TrackEvents(true).Build();
-                IFlagEventProperties flag2 = new FlagEventPropertiesBuilder("flagkey2").Version(22).TrackEvents(true).Build();
+                var flag1 = new TestFlagProperties { Key = "flagkey1", Version = 11, TrackEvents = true };
+                var flag2 = new TestFlagProperties { Key = "flagkey2", Version = 22, TrackEvents = true };
                 var value = LdValue.Of("value");
-                FeatureRequestEvent fe1 = EventFactory.Default.NewFeatureRequestEvent(flag1, _user,
-                    new EvaluationDetail<LdValue>(value, 1, _irrelevantReason), LdValue.Null);
-                FeatureRequestEvent fe2 = EventFactory.Default.NewFeatureRequestEvent(flag2, _user,
-                    new EvaluationDetail<LdValue>(value, 1, _irrelevantReason), LdValue.Null);
-                ep.SendEvent(fe1);
-                ep.SendEvent(fe2);
+                RecordEval(ep, flag1, BasicEval);
+                RecordEval(ep, flag2, BasicEval);
                 ep.Flush();
                 ep.WaitUntilInactive();
 
                 Assert.Collection(captured.Events,
-                    item => CheckIndexEvent(item, fe1, _userJson),
-                    item => CheckFeatureEvent(item, fe1, flag1, false, LdValue.Null),
-                    item => CheckFeatureEvent(item, fe2, flag2, false, LdValue.Null),
+                    item => CheckIndexEvent(item, BasicEval.Timestamp, _userJson),
+                    item => CheckFeatureEvent(item, flag1, BasicEval, LdValue.Null),
+                    item => CheckFeatureEvent(item, flag2, BasicEval, LdValue.Null),
                     item => CheckSummaryEvent(item));
             }
         }
@@ -437,38 +447,60 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
             using (var ep = MakeProcessor(_config, mockSender))
             {
-                IFlagEventProperties flag1 = new FlagEventPropertiesBuilder("flagkey1").Version(11).Build();
-                IFlagEventProperties flag2 = new FlagEventPropertiesBuilder("flagkey2").Version(22).Build();
+                var flag1 = new TestFlagProperties { Key = "flagkey1", Version = 11 };
+                var flag2 = new TestFlagProperties { Key = "flagkey2", Version = 22 };
                 var value1 = LdValue.Of("value1");
                 var value2 = LdValue.Of("value2");
                 var default1 = LdValue.Of("default1");
                 var default2 = LdValue.Of("default2");
-                FeatureRequestEvent fe1a = EventFactory.Default.NewFeatureRequestEvent(flag1, _user,
-                    new EvaluationDetail<LdValue>(value1, 1, _irrelevantReason), default1);
-                FeatureRequestEvent fe1b = EventFactory.Default.NewFeatureRequestEvent(flag1, _user,
-                    new EvaluationDetail<LdValue>(value1, 1, _irrelevantReason), default1);
-                FeatureRequestEvent fe1c = EventFactory.Default.NewFeatureRequestEvent(flag1, _user,
-                    new EvaluationDetail<LdValue>(value2, 2, _irrelevantReason), default1);
-                FeatureRequestEvent fe2 = EventFactory.Default.NewFeatureRequestEvent(flag2, _user,
-                    new EvaluationDetail<LdValue>(value2, 2, _irrelevantReason), default2);
-                ep.SendEvent(fe1a);
-                ep.SendEvent(fe1b);
-                ep.SendEvent(fe1c);
-                ep.SendEvent(fe2);
+                var earliestTime = UnixMillisecondTime.OfMillis(10000);
+                var latestTime = UnixMillisecondTime.OfMillis(20000);
+                RecordEval(ep, flag1, new TestEvalProperties
+                {
+                    Timestamp = earliestTime,
+                    User = _user,
+                    Variation = 1,
+                    Value = value1,
+                    DefaultValue = default1
+                });
+                RecordEval(ep, flag1, new TestEvalProperties
+                {
+                    Timestamp = UnixMillisecondTime.OfMillis(earliestTime.Value + 10),
+                    User = _user,
+                    Variation = 1,
+                    Value = value1,
+                    DefaultValue = default1
+                });
+                RecordEval(ep, flag1, new TestEvalProperties
+                {
+                    Timestamp = UnixMillisecondTime.OfMillis(earliestTime.Value + 20),
+                    User = _user,
+                    Variation = 2,
+                    Value = value2,
+                    DefaultValue = default1
+                });
+                RecordEval(ep, flag2, new TestEvalProperties
+                {
+                    Timestamp = latestTime,
+                    User = _user,
+                    Variation = 2,
+                    Value = value2,
+                    DefaultValue = default2
+                });
                 ep.Flush();
                 ep.WaitUntilInactive();
 
                 Assert.Collection(captured.Events,
-                    item => CheckIndexEvent(item, fe1a, _userJson),
+                    item => CheckIndexEvent(item, earliestTime, _userJson),
                     item => CheckSummaryEventDetails(item,
-                        fe1a.CreationDate,
-                        fe2.CreationDate,
+                        earliestTime,
+                        latestTime,
                         MustHaveFlagSummary(flag1.Key, default1,
-                            MustHaveFlagSummaryCounter(value1, 1, flag1.EventVersion, 2),
-                            MustHaveFlagSummaryCounter(value2, 2, flag1.EventVersion, 1)
+                            MustHaveFlagSummaryCounter(value1, 1, flag1.Version, 2),
+                            MustHaveFlagSummaryCounter(value2, 2, flag1.Version, 1)
                         ),
                         MustHaveFlagSummary(flag2.Key, default2,
-                            MustHaveFlagSummaryCounter(value2, 2, flag2.EventVersion, 1)
+                            MustHaveFlagSummaryCounter(value2, 2, flag2.Version, 1)
                         )
                     )
                 );
@@ -483,14 +515,21 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
             using (var ep = MakeProcessor(_config, mockSender))
             {
-                CustomEvent e = EventFactory.Default.NewCustomEvent("eventkey", _user, LdValue.Of(3), 1.5);
-                ep.SendEvent(e);
+                var ce = new TestCustomEventProperties
+                {
+                    Timestamp = _fixedTimestamp,
+                    User = _user,
+                    Key = "eventkey",
+                    Data = LdValue.Of(3),
+                    MetricValue = 1.5
+                };
+                RecordCustom(ep, ce);
                 ep.Flush();
                 ep.WaitUntilInactive();
 
                 Assert.Collection(captured.Events,
-                    item => CheckIndexEvent(item, e, _userJson),
-                    item => CheckCustomEvent(item, e, LdValue.Null));
+                    item => CheckIndexEvent(item, ce.Timestamp, _userJson),
+                    item => CheckCustomEvent(item, ce, LdValue.Null));
             }
         }
         
@@ -504,13 +543,12 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
             using (var ep = MakeProcessor(_config, mockSender))
             {
-                CustomEvent e = EventFactory.Default.NewCustomEvent("eventkey", _user, LdValue.Of(3), null);
-                ep.SendEvent(e);
+                RecordCustom(ep, BasicCustom);
                 ep.Flush();
                 ep.WaitUntilInactive();
 
                 Assert.Collection(captured.Events,
-                    item => CheckCustomEvent(item, e, _userJson));
+                    item => CheckCustomEvent(item, BasicCustom, _userJson));
             }
         }
 
@@ -525,13 +563,12 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
             using (var ep = MakeProcessor(_config, mockSender))
             {
-                CustomEvent e = EventFactory.Default.NewCustomEvent("eventkey", _user, LdValue.Of("data"), null);
-                ep.SendEvent(e);
+                RecordCustom(ep, BasicCustom);
                 ep.Flush();
                 ep.WaitUntilInactive();
 
                 Assert.Collection(captured.Events,
-                    item => CheckCustomEvent(item, e, _scrubbedUserJson));
+                    item => CheckCustomEvent(item, BasicCustom, _scrubbedUserJson));
             }
         }
 
@@ -543,13 +580,14 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
             using (var ep = MakeProcessor(_config, mockSender))
             {
-                CustomEvent e = EventFactory.Default.NewCustomEvent("eventkey", null, LdValue.Of("data"), null);
-                ep.SendEvent(e);
+                var ce = BasicCustom;
+                ce.User = null;
+                RecordCustom(ep, ce);
                 ep.Flush();
                 ep.WaitUntilInactive();
 
                 Assert.Collection(captured.Events,
-                    item => CheckCustomEvent(item, e, LdValue.Null));
+                    item => CheckCustomEvent(item, ce, LdValue.Null));
             }
         }
 
@@ -561,13 +599,12 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
             using (var ep = MakeProcessor(_config, mockSender))
             {
-                IdentifyEvent e = EventFactory.Default.NewIdentifyEvent(_user);
-                ep.SendEvent(e);
+                ep.RecordIdentifyEvent(_fixedTimestamp, _user);
 
                 ep.Dispose();
 
                 Assert.Collection(captured.Events,
-                    item => CheckIdentifyEvent(item, e, _userJson));
+                    item => CheckIdentifyEvent(item, _fixedTimestamp, _userJson));
                 mockSender.Verify(s => s.Dispose(), Times.Once());
             }
         }
@@ -596,8 +633,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             using (var ep = MakeProcessor(_config, mockSender))
             {
                 ep.SetOffline(true);
-                IdentifyEvent e = EventFactory.Default.NewIdentifyEvent(_user);
-                ep.SendEvent(e);
+                ep.RecordIdentifyEvent(_fixedTimestamp, _user);
                 ep.Flush();
                 ep.WaitUntilInactive();
 
@@ -609,7 +645,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 ep.WaitUntilInactive();
 
                 Assert.Collection(captured.Events,
-                    item => CheckIdentifyEvent(item, e, _userJson));
+                    item => CheckIdentifyEvent(item, _fixedTimestamp, _userJson));
             };
         }
 
@@ -622,19 +658,17 @@ namespace LaunchDarkly.Sdk.Internal.Events
             
             using (var ep = MakeProcessor(_config, mockSender))
             {
-                IdentifyEvent ie = EventFactory.Default.NewIdentifyEvent(_user);
-                ep.SendEvent(ie);
+                ep.RecordIdentifyEvent(_fixedTimestamp, _user);
                 ep.Flush();
                 ep.WaitUntilInactive();
 
-                CustomEvent ce = EventFactory.Default.NewCustomEvent("custom", _user, LdValue.Null, null);
-                ep.SendEvent(ce);
+                RecordCustom(ep, BasicCustom);
                 ep.Flush();
                 ep.WaitUntilInactive();
 
                 Assert.Collection(captured.Events,
-                    item => CheckIdentifyEvent(item, ie, _userJson),
-                    item => CheckCustomEvent(item, ce, LdValue.Null));
+                    item => CheckIdentifyEvent(item, _fixedTimestamp, _userJson),
+                    item => CheckCustomEvent(item, BasicCustom, LdValue.Null));
             }
         }
 
@@ -647,18 +681,16 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
             using (var ep = MakeProcessor(_config, mockSender))
             {
-                IdentifyEvent ie = EventFactory.Default.NewIdentifyEvent(_user);
-                ep.SendEvent(ie);
+                ep.RecordIdentifyEvent(_fixedTimestamp, _user);
                 ep.Flush();
                 ep.WaitUntilInactive();
 
-                CustomEvent ce = EventFactory.Default.NewCustomEvent("custom", _user, LdValue.Null, null);
-                ep.SendEvent(ce);
+                RecordCustom(ep, BasicCustom);
                 ep.Flush();
                 ep.WaitUntilInactive();
 
                 Assert.Collection(captured.Events,
-                    item => CheckIdentifyEvent(item, ie, _userJson));
+                    item => CheckIdentifyEvent(item, _fixedTimestamp, _userJson));
             }
         }
 
@@ -675,14 +707,11 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
             using (var ep = MakeProcessor(_config, mockSender, mockDiagnosticStore.Object, null, diagnosticCountdown))
             {
-                var flag1 = new FlagEventPropertiesBuilder("flagkey1").Version(11).TrackEvents(true).Build();
-                var value = LdValue.Of("value");
-                var fe1 = EventFactory.Default.NewFeatureRequestEvent(flag1, _user,
-                    new EvaluationDetail<LdValue>(value, 1, _irrelevantReason), LdValue.Null);
-                ep.SendEvent(fe1);
+                RecordEval(ep, BasicFlagWithTracking, BasicEval);
                 FlushAndWait(ep);
 
-                mockDiagnosticStore.Verify(diagStore => diagStore.RecordEventsInBatch(2), Times.Once(), "Diagnostic store's RecordEventsInBatch should be called with the number of events in last flush");
+                mockDiagnosticStore.Verify(diagStore => diagStore.RecordEventsInBatch(2), Times.Once(),
+                    "Diagnostic store's RecordEventsInBatch should be called with the number of events in last flush");
 
                 ep.DoDiagnosticSend(null);
                 diagnosticCountdown.Wait();
@@ -784,42 +813,57 @@ namespace LaunchDarkly.Sdk.Internal.Events
             return LdValue.Parse(JsonConvert.SerializeObject(EventUser.FromUser(user, _config)));
         }
 
-        private void CheckIdentifyEvent(LdValue t, IdentifyEvent ie, LdValue userJson)
+        private void CheckIdentifyEvent(LdValue t, UnixMillisecondTime timestamp, LdValue userJson)
         {
             Assert.Equal(LdValue.Of("identify"), t.Get("kind"));
-            Assert.Equal(LdValue.Of(ie.CreationDate.Value), t.Get("creationDate"));
+            Assert.Equal(LdValue.Of(timestamp.Value), t.Get("creationDate"));
             Assert.Equal(userJson, t.Get("user"));
         }
 
-        private void CheckIndexEvent(LdValue t, Event sourceEvent, LdValue userJson)
+        private void CheckIndexEvent(LdValue t, UnixMillisecondTime timestamp, LdValue userJson)
         {
             Assert.Equal(LdValue.Of("index"), t.Get("kind"));
-            Assert.Equal(LdValue.Of(sourceEvent.CreationDate.Value), t.Get("creationDate"));
+            Assert.Equal(LdValue.Of(timestamp.Value), t.Get("creationDate"));
             Assert.Equal(userJson, t.Get("user"));
         }
 
-        private void CheckFeatureEvent(LdValue t, FeatureRequestEvent fe, IFlagEventProperties flag, bool debug, LdValue userJson, EvaluationReason? reason = null)
+        private void CheckFeatureEvent(LdValue t, TestFlagProperties f, TestEvalProperties e,
+            LdValue userJson)
         {
-            Assert.Equal(LdValue.Of(debug ? "debug" : "feature"), t.Get("kind"));
-            Assert.Equal(LdValue.Of(fe.CreationDate.Value), t.Get("creationDate"));
-            Assert.Equal(LdValue.Of(flag.Key), t.Get("key"));
-            Assert.Equal(LdValue.Of(flag.EventVersion), t.Get("version"));
-            Assert.Equal(fe.Variation.HasValue ? LdValue.Of(fe.Variation.Value) : LdValue.Null, t.Get("variation"));
-            Assert.Equal(fe.Value, t.Get("value"));
-            CheckEventUserOrKey(t, fe, userJson);
-            Assert.Equal(reason, fe.Reason);
+            CheckFeatureOrDebugEvent("feature", t, f, e, userJson);
         }
 
-        private void CheckCustomEvent(LdValue t, CustomEvent e, LdValue userJson)
+        private void CheckDebugEvent(LdValue t, TestFlagProperties f, TestEvalProperties e,
+            LdValue userJson)
+        {
+            CheckFeatureOrDebugEvent("debug", t, f, e, userJson);
+        }
+
+        private void CheckFeatureOrDebugEvent(string kind, LdValue t, TestFlagProperties f, TestEvalProperties e,
+            LdValue userJson)
+        {
+            Assert.Equal(LdValue.Of(kind), t.Get("kind"));
+            Assert.Equal(LdValue.Of(e.Timestamp.Value), t.Get("creationDate"));
+            Assert.Equal(LdValue.Of(f.Key), t.Get("key"));
+            Assert.Equal(LdValue.Of(f.Version), t.Get("version"));
+            Assert.Equal(e.Variation.HasValue ? LdValue.Of(e.Variation.Value) : LdValue.Null, t.Get("variation"));
+            Assert.Equal(e.Value, t.Get("value"));
+            CheckEventUserOrKey(t, e.User, userJson);
+            Assert.Equal(e.Reason.HasValue ?
+                LdValue.Parse(JsonConvert.SerializeObject(e.Reason.Value)) : LdValue.Null,
+                t.Get("reason"));
+        }
+
+        private void CheckCustomEvent(LdValue t, TestCustomEventProperties e, LdValue userJson)
         {
             Assert.Equal(LdValue.Of("custom"), t.Get("kind"));
             Assert.Equal(LdValue.Of(e.Key), t.Get("key"));
             Assert.Equal(e.Data, t.Get("data"));
-            CheckEventUserOrKey(t, e, userJson);
+            CheckEventUserOrKey(t, e.User, userJson);
             Assert.Equal(e.MetricValue.HasValue ? LdValue.Of(e.MetricValue.Value) : LdValue.Null, t.Get("metricValue"));
         }
 
-        private void CheckEventUserOrKey(LdValue o, Event e, LdValue userJson)
+        private void CheckEventUserOrKey(LdValue o, User user, LdValue userJson)
         {
             if (!userJson.IsNull)
             {
@@ -829,7 +873,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             else
             {
                 Assert.Equal(LdValue.Null, o.Get("user"));
-                Assert.Equal(e.User is null ? LdValue.Null : LdValue.Of(e.User.Key), o.Get("userKey"));
+                Assert.Equal(user is null ? LdValue.Null : LdValue.Of(user.Key), o.Get("userKey"));
             }
         }
         private void CheckSummaryEvent(LdValue t)
