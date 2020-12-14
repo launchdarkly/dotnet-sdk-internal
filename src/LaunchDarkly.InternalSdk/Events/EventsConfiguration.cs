@@ -33,7 +33,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
         public bool InlineUsersInEvents { get; set; }
 
-        public IImmutableSet<string> PrivateAttributeNames { get; set;  }
+        public IImmutableSet<UserAttribute> PrivateAttributeNames { get; set;  }
 
         public TimeSpan? RetryInterval { get; set; }
 

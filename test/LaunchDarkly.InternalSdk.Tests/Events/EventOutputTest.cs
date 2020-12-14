@@ -428,7 +428,8 @@ namespace LaunchDarkly.Sdk.Internal.Events
             var config = new EventsConfiguration();
             if (globallyPrivate)
             {
-                config.PrivateAttributeNames = ImmutableHashSet.Create<string>(privateAttrName);
+                config.PrivateAttributeNames = ImmutableHashSet.Create<UserAttribute>(
+                    UserAttribute.ForName(privateAttrName));
             };
 
             TestInlineUserSerialization(builder.Build(), userJson, config);

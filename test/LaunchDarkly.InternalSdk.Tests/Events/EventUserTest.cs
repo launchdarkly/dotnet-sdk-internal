@@ -15,7 +15,8 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
         static readonly EventsConfiguration _configWithSomeAttrsPrivate = new EventsConfiguration
         {
-            PrivateAttributeNames = ImmutableHashSet.Create<string>("firstName", "bizzle")
+            PrivateAttributeNames = ImmutableHashSet.Create<UserAttribute>(
+                UserAttribute.FirstName, UserAttribute.ForName("bizzle"))
         };
 
         static readonly User _baseUser = User.Builder("abc")

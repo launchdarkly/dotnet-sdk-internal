@@ -46,15 +46,15 @@ namespace LaunchDarkly.Sdk.Internal.Events
         public EventUser Build()
         {
             _result.Key = _user.Key;
-            _result.Secondary = StringAttrIfNotPrivate("secondary", _user.Secondary);
+            _result.Secondary = StringAttrIfNotPrivate(UserAttribute.Secondary);
             _result.Anonymous = _user.Anonymous ? (bool?)true : null;
-            _result.IPAddress = StringAttrIfNotPrivate("ip", _user.IPAddress);
-            _result.Country = StringAttrIfNotPrivate("country", _user.Country);
-            _result.FirstName = StringAttrIfNotPrivate("firstName", _user.FirstName);
-            _result.LastName = StringAttrIfNotPrivate("lastName", _user.LastName);
-            _result.Name = StringAttrIfNotPrivate("name", _user.Name);
-            _result.Avatar = StringAttrIfNotPrivate("avatar", _user.Avatar);
-            _result.Email = StringAttrIfNotPrivate("email", _user.Email);
+            _result.IPAddress = StringAttrIfNotPrivate(UserAttribute.IPAddress);
+            _result.Country = StringAttrIfNotPrivate(UserAttribute.Country);
+            _result.FirstName = StringAttrIfNotPrivate(UserAttribute.FirstName);
+            _result.LastName = StringAttrIfNotPrivate(UserAttribute.LastName);
+            _result.Name = StringAttrIfNotPrivate(UserAttribute.Name);
+            _result.Avatar = StringAttrIfNotPrivate(UserAttribute.Avatar);
+            _result.Email = StringAttrIfNotPrivate(UserAttribute.Email);
 
             // With the custom attributes, for efficiency's sake we would like to reuse the same ImmutableDictionary
             // whenever possible. So, we'll lazily create a new collection only if it turns out that there are any
@@ -62,7 +62,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             ImmutableDictionary<string, LdValue>.Builder customAttrsBuilder = null;
             foreach (var kv in _user.Custom)
             {
-                if (!CheckPrivateAttr(kv.Key, kv.Value))
+                if (!CheckPrivateAttr(UserAttribute.ForName(kv.Key)))
                 {
                     if (customAttrsBuilder is null)
                     {
@@ -95,17 +95,17 @@ namespace LaunchDarkly.Sdk.Internal.Events
             return _result;
         }
         
-        private bool CheckPrivateAttr<T>(string name, T value)
+        private bool CheckPrivateAttr(UserAttribute name)
         {
             if (_config.AllAttributesPrivate ||
                      (_config.PrivateAttributeNames != null &&_config.PrivateAttributeNames.Contains(name)) ||
-                     (_user.PrivateAttributeNames != null && _user.PrivateAttributeNames.Contains(name)))
+                     (_user.PrivateAttributeNames != null && _user.PrivateAttributeNames.Contains(name.AttributeName)))
             {
                 if (_privateAttrs is null)
                 {
                     _privateAttrs = ImmutableSortedSet.CreateBuilder<string>();
                 }
-                _privateAttrs.Add(name);
+                _privateAttrs.Add(name.AttributeName);
                 return false;
             }
             else
@@ -114,9 +114,10 @@ namespace LaunchDarkly.Sdk.Internal.Events
             }
         }
 
-        private string StringAttrIfNotPrivate(string name, string value)
+        private string StringAttrIfNotPrivate(UserAttribute attr)
         {
-            return (value is null) ? null : (CheckPrivateAttr(name, value) ? value : null);
+            var value = _user.GetAttribute(attr).AsString;
+            return (value is null) ? null : (CheckPrivateAttr(attr) ? value : null);
         }
     }
 }
