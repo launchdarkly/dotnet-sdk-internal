@@ -4,255 +4,174 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using LaunchDarkly.Logging;
-using LaunchDarkly.Sdk.Interfaces;
 
 namespace LaunchDarkly.Sdk.Internal.Events
 {
-    public sealed class DefaultEventProcessor : IEventProcessor
+    internal class EventProcessorInternal
     {
-        internal static readonly string CurrentSchemaVersion = "3";
+        #region Inner types
 
-        private readonly BlockingCollection<IEventMessage> _messageQueue;
-        private readonly EventDispatcher _dispatcher;
-        private readonly IDiagnosticStore _diagnosticStore;
-        private readonly Timer _flushTimer;
-        private readonly Timer _flushUsersTimer;
-        private readonly TimeSpan _diagnosticRecordingInterval;
-        private readonly Object _diagnosticTimerLock = new Object();
-        private readonly Logger _logger;
-        private Timer _diagnosticTimer;
-        private AtomicBoolean _stopped;
-        private AtomicBoolean _offline;
-        private AtomicBoolean _sentInitialDiagnostics;
-        private AtomicBoolean _inputCapacityExceeded;
+        // These types are used only for communication between EventProcessor and
+        // EventProcessorInternal on their shared queue.
 
-        public DefaultEventProcessor(
-            EventsConfiguration config,
-            IEventSender eventSender,
-            IUserDeduplicator userDeduplicator,
-            IDiagnosticStore diagnosticStore,
-            IDiagnosticDisabler diagnosticDisabler,
-            Logger logger,
-            Action testActionOnDiagnosticSend
-            )
+        internal interface IEventMessage { }
+
+        internal class EventMessage : IEventMessage
         {
-            _logger = logger;
-            _stopped = new AtomicBoolean(false);
-            _offline = new AtomicBoolean(false);
-            _sentInitialDiagnostics = new AtomicBoolean(false);
-            _inputCapacityExceeded = new AtomicBoolean(false);
-            _messageQueue = new BlockingCollection<IEventMessage>(config.EventCapacity > 0 ? config.EventCapacity : 1);
-            _dispatcher = new EventDispatcher(config, _messageQueue, eventSender, userDeduplicator, diagnosticStore, _logger, testActionOnDiagnosticSend);
-            if (config.EventFlushInterval > TimeSpan.Zero)
-            {
-                _flushTimer = new Timer(DoBackgroundFlush, null, config.EventFlushInterval,
-                    config.EventFlushInterval);
-            }
-            _diagnosticStore = diagnosticStore;
-            _diagnosticRecordingInterval = config.DiagnosticRecordingInterval;
-            if (userDeduplicator != null && userDeduplicator.FlushInterval.HasValue)
-            {
-                _flushUsersTimer = new Timer(DoUserKeysFlush, null, userDeduplicator.FlushInterval.Value,
-                    userDeduplicator.FlushInterval.Value);
-            }
-            else
-            {
-                _flushUsersTimer = null;
-            }
+            internal IEvent Event { get; private set; }
 
-            if (diagnosticStore != null)
+            internal EventMessage(IEvent e)
             {
-                SetupDiagnosticInit(diagnosticDisabler == null || !diagnosticDisabler.Disabled);
-
-                if (diagnosticDisabler != null)
-                {
-                    diagnosticDisabler.DisabledChanged += ((sender, args) => SetupDiagnosticInit(!args.Disabled));
-                }
+                Event = e;
             }
         }
 
-        private void SetupDiagnosticInit(bool enabled)
+        internal class FlushMessage : IEventMessage { }
+
+        internal class FlushUsersMessage : IEventMessage { }
+
+        internal class DiagnosticMessage : IEventMessage { }
+
+        internal class SynchronousMessage : IEventMessage
         {
-            lock (_diagnosticTimerLock)
+            internal readonly Semaphore _reply;
+
+            internal SynchronousMessage()
             {
-                _diagnosticTimer?.Dispose();
-                _diagnosticTimer = null;
-                if (enabled)
-                {
-                    TimeSpan initialDelay = _diagnosticRecordingInterval - (DateTime.Now - _diagnosticStore.DataSince);
-                    TimeSpan safeDelay =
-                        (initialDelay < TimeSpan.Zero) ?
-                        TimeSpan.Zero :
-                        ((initialDelay > _diagnosticRecordingInterval) ? _diagnosticRecordingInterval: initialDelay);
-                    _diagnosticTimer = new Timer(DoDiagnosticSend, null, safeDelay, _diagnosticRecordingInterval);
-                }
+                _reply = new Semaphore(0, 1);
             }
-            // Send initial and persisted unsent event the first time diagnostics are started
-            if (enabled && !_sentInitialDiagnostics.GetAndSet(true))
+
+            internal void WaitForCompletion()
             {
-                var unsent = _diagnosticStore.PersistedUnsentEvent;
-                var init = _diagnosticStore.InitEvent;
-                if (unsent.HasValue || init.HasValue)
+                _reply.WaitOne();
+            }
+
+            internal void Completed()
+            {
+                _reply.Release();
+            }
+        }
+
+        internal class TestSyncMessage : SynchronousMessage { }
+
+        internal class ShutdownMessage : SynchronousMessage { }
+
+        internal interface IEvent
+        {
+            UnixMillisecondTime Timestamp { get; }
+            User User { get; }
+        }
+
+        internal class FeatureRequestEvent : IEvent
+        {
+            public UnixMillisecondTime Timestamp { get; set; }
+            public User User { get; set; }
+            public string FlagKey { get; set; }
+            public int? FlagVersion { get; set; }
+            public int? Variation { get; set; }
+            public LdValue Value { get; set; }
+            public LdValue Default { get; set; }
+            public EvaluationReason? Reason { get; set; }
+            public string PrereqOf { get; set; }
+            public bool TrackEvents { get; set; }
+            public UnixMillisecondTime? DebugEventsUntilDate { get; set; }
+        }
+
+        internal class IdentifyEvent : IEvent
+        {
+            public UnixMillisecondTime Timestamp { get; set; }
+            public User User { get; set; }
+        }
+
+        internal class CustomEvent : IEvent
+        {
+            public UnixMillisecondTime Timestamp { get; set; }
+            public User User { get; set; }
+            public String EventKey { get; set; }
+            public LdValue Data { get; set; }
+            public double? MetricValue { get; set; }
+        }
+
+        internal class IndexEvent : IEvent
+        {
+            public UnixMillisecondTime Timestamp { get; set; }
+            public User User { get; set; }
+        }
+
+        internal class DebugEvent : IEvent
+        {
+            public FeatureRequestEvent FromEvent { get; set; }
+            public UnixMillisecondTime Timestamp => FromEvent.Timestamp;
+            public User User => FromEvent.User;
+        }
+
+
+        internal sealed class FlushPayload
+        {
+            internal IEvent[] Events { get; set; }
+            internal EventSummary Summary { get; set; }
+        }
+
+        internal sealed class EventBuffer
+        {
+            private readonly List<IEvent> _events;
+            private readonly EventSummarizer _summarizer;
+            private readonly IDiagnosticStore _diagnosticStore;
+            private readonly int _capacity;
+            private readonly Logger _logger;
+            private bool _exceededCapacity;
+
+            internal EventBuffer(int capacity, IDiagnosticStore diagnosticStore, Logger logger)
+            {
+                _capacity = capacity;
+                _events = new List<IEvent>();
+                _summarizer = new EventSummarizer();
+                _diagnosticStore = diagnosticStore;
+                _logger = logger;
+            }
+
+            internal void AddEvent(IEvent e)
+            {
+                if (_events.Count >= _capacity)
                 {
-                    Task.Run(async () => // do these in a single task for test determinacy
+                    _diagnosticStore?.IncrementDroppedEvents();
+                    if (!_exceededCapacity)
                     {
-                        if (unsent.HasValue)
-                        {
-                            await _dispatcher.SendDiagnosticEventAsync(unsent.Value);
-                        }
-                        if (init.HasValue)
-                        {
-                            await _dispatcher.SendDiagnosticEventAsync(init.Value);
-                        }
-                    });
-                }
-            }
-        }
-
-        public void SetOffline(bool offline)
-        {
-            _offline.GetAndSet(offline);
-            // Note that the offline state is known only to DefaultEventProcessor, not to EventDispatcher. We will
-            // simply avoid sending any flush messages to EventDispatcher if we're offline. EventDispatcher will
-            // never initiate a flush on its own.
-        }
-
-        public void SendEvent(Event eventToLog)
-        {
-            SubmitMessage(new EventMessage(eventToLog));
-        }
-
-        public void Flush()
-        {
-            if (!_offline.Get())
-            {
-                SubmitMessage(new FlushMessage());
-            }
-        }
-
-        public void Dispose()
-        {
-            Dispose(true);
-            GC.SuppressFinalize(this);
-        }
-
-        private void Dispose(bool disposing)
-        {
-            if (disposing)
-            {
-                if (!_stopped.GetAndSet(true))
-                {
-                    _flushTimer?.Dispose();
-                    _flushUsersTimer?.Dispose();
-                    SubmitMessage(new FlushMessage());
-                    ShutdownMessage message = new ShutdownMessage();
-                    SubmitMessage(message);
-                    message.WaitForCompletion();
-                    ((IDisposable)_dispatcher).Dispose();
-                    _messageQueue.CompleteAdding();
-                    _messageQueue.Dispose();
-                }
-            }
-        }
-
-        private bool SubmitMessage(IEventMessage message)
-        {
-            try
-            {
-                if (_messageQueue.TryAdd(message))
-                {
-                    _inputCapacityExceeded.GetAndSet(false);
+                        _logger.Warn("Exceeded event queue capacity. Increase capacity to avoid dropping events.");
+                        _exceededCapacity = true;
+                    }
                 }
                 else
                 {
-                    // This doesn't mean that the output event buffer is full, but rather that the main thread is
-                    // seriously backed up with not-yet-processed events. We shouldn't see this.
-                    if (!_inputCapacityExceeded.GetAndSet(true))
-                    {
-                        _logger.Warn("Events are being produced faster than they can be processed");
-                    }
+                    _events.Add(e);
+                    _exceededCapacity = false;
                 }
             }
-            catch (InvalidOperationException)
+
+            internal void AddToSummary(IEvent e)
             {
-                // queue has been shut down
-                return false;
+                if (e is FeatureRequestEvent fe)
+                {
+                    _summarizer.SummarizeEvent(fe.Timestamp, fe.FlagKey, fe.FlagVersion, fe.Variation, fe.Value, fe.Default);
+                }
             }
-            return true;
-        }
 
-        // exposed for testing
-        internal void WaitUntilInactive()
-        {
-            TestSyncMessage message = new TestSyncMessage();
-            SubmitMessage(message);
-            message.WaitForCompletion();
-        }
-
-        private void DoBackgroundFlush(object stateInfo)
-        {
-            if (!_offline.Get())
+            internal FlushPayload GetPayload()
             {
-                SubmitMessage(new FlushMessage());
+                return new FlushPayload { Events = _events.ToArray(), Summary = _summarizer.Snapshot() };
+            }
+
+            internal void Clear()
+            {
+                _events.Clear();
+                _summarizer.Clear();
             }
         }
 
-        private void DoUserKeysFlush(object stateInfo)
-        {
-            SubmitMessage(new FlushUsersMessage());
-        }
+        #endregion
 
-        // exposed for testing 
-        internal void DoDiagnosticSend(object stateInfo)
-        {
-            SubmitMessage(new DiagnosticMessage());
-        }
-    }
+        #region Private fields
 
-    internal interface IEventMessage { }
-
-    internal class EventMessage : IEventMessage
-    {
-        internal Event Event { get; private set; }
-
-        internal EventMessage(Event e)
-        {
-            Event = e;
-        }
-    }
-
-    internal class FlushMessage : IEventMessage { }
-
-    internal class FlushUsersMessage : IEventMessage { }
-
-    internal class DiagnosticMessage : IEventMessage { }
-
-    internal class SynchronousMessage : IEventMessage
-    {
-        internal readonly Semaphore _reply;
-
-        internal SynchronousMessage()
-        {
-            _reply = new Semaphore(0, 1);
-        }
-
-        internal void WaitForCompletion()
-        {
-            _reply.WaitOne();
-        }
-
-        internal void Completed()
-        {
-            _reply.Release();
-        }
-    }
-
-    internal class TestSyncMessage : SynchronousMessage { }
-
-    internal class ShutdownMessage : SynchronousMessage { }
-
-    internal sealed class EventDispatcher : IDisposable
-    {
         private static readonly int MaxFlushWorkers = 5;
 
         private readonly EventsConfiguration _config;
@@ -266,7 +185,11 @@ namespace LaunchDarkly.Sdk.Internal.Events
         private long _lastKnownPastTime;
         private volatile bool _disabled;
 
-        internal EventDispatcher(
+        #endregion
+
+        #region Constructor
+
+        internal EventProcessorInternal(
             EventsConfiguration config,
             BlockingCollection<IEventMessage> messageQueue,
             IEventSender eventSender,
@@ -290,11 +213,19 @@ namespace LaunchDarkly.Sdk.Internal.Events
             Task.Run(() => RunMainLoop(messageQueue, buffer));
         }
 
-        void IDisposable.Dispose()
+        #endregion
+
+        #region Public methods
+
+        public void Dispose()
         {
             Dispose(true);
             GC.SuppressFinalize(this);
         }
+
+        #endregion
+
+        #region Private methods
 
         private void Dispose(bool disposing)
         {
@@ -363,7 +294,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             _flushWorkersCounter.Reset(1);
         }
 
-        private void ProcessEvent(Event e, EventBuffer buffer)
+        private void ProcessEvent(IEvent e, EventBuffer buffer)
         {
             if (_disabled)
             {
@@ -376,13 +307,13 @@ namespace LaunchDarkly.Sdk.Internal.Events
             // Decide whether to add the event to the payload. Feature events may be added twice, once for
             // the event (if tracked) and once for debugging.
             bool willAddFullEvent;
-            Event debugEvent = null;
+            IEvent debugEvent = null;
             if (e is FeatureRequestEvent fe)
             {
                 willAddFullEvent = fe.TrackEvents;
                 if (ShouldDebugEvent(fe))
                 {
-                    debugEvent = EventFactory.Default.NewDebugEvent(fe);
+                    debugEvent = new DebugEvent { FromEvent = fe };
                 }
             }
             else
@@ -400,7 +331,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                     bool needUserEvent = _userDeduplicator.ProcessUser(e.User);
                     if (needUserEvent && !(e is IdentifyEvent))
                     {
-                        IndexEvent ie = new IndexEvent(e.CreationDate, e.User);
+                        IndexEvent ie = new IndexEvent { Timestamp = e.Timestamp, User = e.User };
                         buffer.AddEvent(ie);
                     }
                     else if (!(e is IdentifyEvent))
@@ -434,7 +365,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             return false;
         }
 
-        private bool ShouldTrackFullEvent(Event e)
+        private bool ShouldTrackFullEvent(IEvent e)
         {
             if (e is FeatureRequestEvent fe)
             {
@@ -534,64 +465,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             await _eventSender.SendEventDataAsync(EventDataKind.DiagnosticEvent, jsonDiagnostic, 1);
             _testActionOnDiagnosticSend?.Invoke();
         }
-    }
 
-    internal sealed class FlushPayload
-    {
-        internal Event[] Events { get; set; }
-        internal EventSummary Summary { get; set; }
-    }
-
-    internal sealed class EventBuffer
-    {
-        private readonly List<Event> _events;
-        private readonly EventSummarizer _summarizer;
-        private readonly IDiagnosticStore _diagnosticStore;
-        private readonly int _capacity;
-        private readonly Logger _logger;
-        private bool _exceededCapacity;
-
-        internal EventBuffer(int capacity, IDiagnosticStore diagnosticStore, Logger logger)
-        {
-            _capacity = capacity;
-            _events = new List<Event>();
-            _summarizer = new EventSummarizer();
-            _diagnosticStore = diagnosticStore;
-            _logger = logger;
-        }
-
-        internal void AddEvent(Event e)
-        {
-            if (_events.Count >= _capacity)
-            {
-                _diagnosticStore?.IncrementDroppedEvents();
-                if (!_exceededCapacity)
-                {
-                    _logger.Warn("Exceeded event queue capacity. Increase capacity to avoid dropping events.");
-                    _exceededCapacity = true;
-                }
-            }
-            else
-            {
-                _events.Add(e);
-                _exceededCapacity = false;
-            }
-        }
-
-        internal void AddToSummary(Event e)
-        {
-            _summarizer.SummarizeEvent(e);
-        }
-
-        internal FlushPayload GetPayload()
-        {
-            return new FlushPayload { Events = _events.ToArray(), Summary = _summarizer.Snapshot() };
-        }
-
-        internal void Clear()
-        {
-            _events.Clear();
-            _summarizer.Clear();
-        }
+        #endregion
     }
 }
