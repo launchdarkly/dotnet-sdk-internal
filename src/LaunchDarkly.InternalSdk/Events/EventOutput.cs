@@ -83,11 +83,11 @@ namespace LaunchDarkly.Sdk.Internal.Events
                     WriteUserOrKey(ce.User, false);
                     if (!ce.Data.IsNull)
                     {
-                        ValueConverter.WriteJson(ce.Data, _obj.Property("data"));
+                        ValueConverter.WriteJson(ce.Data, _obj.Name("data"));
                     }
                     if (ce.MetricValue.HasValue)
                     {
-                        _obj.Property("metricValue").Double(ce.MetricValue.Value);
+                        _obj.Name("metricValue").Double(ce.MetricValue.Value);
                     }
                     break;
                 case EventProcessorInternal.IndexEvent ie:
@@ -110,18 +110,18 @@ namespace LaunchDarkly.Sdk.Internal.Events
             WriteUserOrKey(fe.User, debug);
             if (fe.FlagVersion.HasValue)
             {
-                _obj.Property("version").Int(fe.FlagVersion.Value);
+                _obj.Name("version").Int(fe.FlagVersion.Value);
             }
             if (fe.Variation.HasValue)
             {
-                _obj.Property("variation").Int(fe.Variation.Value);
+                _obj.Name("variation").Int(fe.Variation.Value);
             }
-            ValueConverter.WriteJson(fe.Value, _obj.Property("value"));
+            ValueConverter.WriteJson(fe.Value, _obj.Name("value"));
             if (!fe.Default.IsNull)
             {
-                ValueConverter.WriteJson(fe.Default, _obj.Property("default"));
+                ValueConverter.WriteJson(fe.Default, _obj.Name("default"));
             }
-            _obj.MaybeProperty("prereqOf", fe.PrereqOf != null).String(fe.PrereqOf);
+            _obj.MaybeName("prereqOf", fe.PrereqOf != null).String(fe.PrereqOf);
             WriteReason(fe.Reason);
         }
 
@@ -129,11 +129,11 @@ namespace LaunchDarkly.Sdk.Internal.Events
         {
             var obj = _jsonWriter.Object();
 
-            obj.Property("kind").String("summary");
-            obj.Property("startDate").Long(summary.StartDate.Value);
-            obj.Property("endDate").Long(summary.EndDate.Value);
+            obj.Name("kind").String("summary");
+            obj.Name("startDate").Long(summary.StartDate.Value);
+            obj.Name("endDate").Long(summary.EndDate.Value);
 
-            var flagsObj = obj.Property("features").Object();
+            var flagsObj = obj.Name("features").Object();
 
             var unprocessedCounters = summary.Counters.Select(kv => MutableKeyValuePair<EventsCounterKey, EventsCounterValue>.FromKeyValue(kv)).ToArray();
             for (var i = 0; i < unprocessedCounters.Length; i++)
@@ -146,9 +146,9 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 var flagKey = firstEntry.Key.Key;
                 var flagDefault = firstEntry.Value.Default;
 
-                var flagObj = flagsObj.Property(flagKey).Object();
-                ValueConverter.WriteJson(flagDefault, flagObj.Property("default"));
-                var countersArr = flagObj.Property("counters").Array();
+                var flagObj = flagsObj.Name(flagKey).Object();
+                ValueConverter.WriteJson(flagDefault, flagObj.Name("default"));
+                var countersArr = flagObj.Name("counters").Array();
 
                 for (var j = i; j < unprocessedCounters.Length; j++)
                 {
@@ -162,18 +162,18 @@ namespace LaunchDarkly.Sdk.Internal.Events
                         var counterObj = countersArr.Object();
                         if (key.Variation.HasValue)
                         {
-                            counterObj.Property("variation").Int(key.Variation.Value);
+                            counterObj.Name("variation").Int(key.Variation.Value);
                         }
-                        ValueConverter.WriteJson(counter.FlagValue, counterObj.Property("value"));
+                        ValueConverter.WriteJson(counter.FlagValue, counterObj.Name("value"));
                         if (key.Version.HasValue)
                         {
-                            counterObj.Property("version").Int(key.Version.Value);
+                            counterObj.Name("version").Int(key.Version.Value);
                         }
                         else
                         {
-                            counterObj.Property("unknown").Bool(true);
+                            counterObj.Name("unknown").Bool(true);
                         }
-                        counterObj.Property("count").Int(counter.Count);
+                        counterObj.Name("count").Int(counter.Count);
                         counterObj.End();
                     }
                 }
@@ -188,9 +188,9 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
         private void WriteBase(string kind, UnixMillisecondTime creationDate, string key)
         {
-            _obj.Property("kind").String(kind);
-            _obj.Property("creationDate").Long(creationDate.Value);
-            _obj.MaybeProperty("key", key != null).String(key);
+            _obj.Name("kind").String(kind);
+            _obj.Name("creationDate").Long(creationDate.Value);
+            _obj.MaybeName("key", key != null).String(key);
         }
 
         private void WriteUserOrKey(User user, bool forceInline)
@@ -201,7 +201,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             }
             else if (user != null)
             {
-                _obj.Property("userKey").String(user.Key);
+                _obj.Name("userKey").String(user.Key);
             }
         }
 
@@ -213,32 +213,32 @@ namespace LaunchDarkly.Sdk.Internal.Events
             }
             var eu = EventUser.FromUser(user, _config);
 
-            var userObj = _obj.Property("user").Object();
-            userObj.Property("key").String(eu.Key);
-            userObj.MaybeProperty("secondary", eu.Secondary != null).String(eu.Secondary);
-            userObj.MaybeProperty("ip", eu.IPAddress != null).String(eu.IPAddress);
-            userObj.MaybeProperty("country", eu.Country != null).String(eu.Country);
-            userObj.MaybeProperty("firstName", eu.FirstName != null).String(eu.FirstName);
-            userObj.MaybeProperty("lastName", eu.LastName != null).String(eu.LastName);
-            userObj.MaybeProperty("name", eu.Name != null).String(eu.Name);
-            userObj.MaybeProperty("avatar", eu.Avatar != null).String(eu.Avatar);
-            userObj.MaybeProperty("email", eu.Email != null).String(eu.Email);
+            var userObj = _obj.Name("user").Object();
+            userObj.Name("key").String(eu.Key);
+            userObj.MaybeName("secondary", eu.Secondary != null).String(eu.Secondary);
+            userObj.MaybeName("ip", eu.IPAddress != null).String(eu.IPAddress);
+            userObj.MaybeName("country", eu.Country != null).String(eu.Country);
+            userObj.MaybeName("firstName", eu.FirstName != null).String(eu.FirstName);
+            userObj.MaybeName("lastName", eu.LastName != null).String(eu.LastName);
+            userObj.MaybeName("name", eu.Name != null).String(eu.Name);
+            userObj.MaybeName("avatar", eu.Avatar != null).String(eu.Avatar);
+            userObj.MaybeName("email", eu.Email != null).String(eu.Email);
             if (eu.Anonymous.HasValue)
             {
-                userObj.Property("anonymous").Bool(eu.Anonymous.Value);
+                userObj.Name("anonymous").Bool(eu.Anonymous.Value);
             }
             if (eu.Custom != null && eu.Custom.Count > 0)
             {
-                var customObj = userObj.Property("custom").Object();
+                var customObj = userObj.Name("custom").Object();
                 foreach (var kv in eu.Custom)
                 {
-                    ValueConverter.WriteJson(kv.Value, customObj.Property(kv.Key));
+                    ValueConverter.WriteJson(kv.Value, customObj.Name(kv.Key));
                 }
                 customObj.End();
             }
             if (eu.PrivateAttrs != null)
             {
-                var arr = userObj.Property("privateAttrs").Array();
+                var arr = userObj.Name("privateAttrs").Array();
                 foreach (var a in eu.PrivateAttrs)
                 {
                     arr.String(a);
@@ -252,7 +252,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         {
             if (reason.HasValue)
             {
-                ReasonConverter.WriteJson(reason.Value, _obj.Property("reason"));
+                ReasonConverter.WriteJson(reason.Value, _obj.Name("reason"));
             }
         }
     }
