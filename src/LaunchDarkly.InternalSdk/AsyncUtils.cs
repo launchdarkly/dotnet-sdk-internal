@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 
 namespace LaunchDarkly.Sdk.Internal
 {
-    internal static class AsyncUtils
+    public static class AsyncUtils
     {
         private static readonly TaskFactory _taskFactory = new TaskFactory(CancellationToken.None,
             TaskCreationOptions.None, TaskContinuationOptions.None, TaskScheduler.Default);
@@ -17,7 +17,7 @@ namespace LaunchDarkly.Sdk.Internal
         // code had been modified with ConfigureAwait(false), but that is very error-prone and we can't depend
         // on feature store implementors doing so.
 
-        internal static void WaitSafely(Func<Task> taskFn)
+        public static void WaitSafely(Func<Task> taskFn)
         {
             _taskFactory.StartNew(taskFn)
                 .Unwrap()
@@ -26,7 +26,7 @@ namespace LaunchDarkly.Sdk.Internal
             // Note, GetResult does not throw AggregateException so we don't need to post-process exceptions
         }
 
-        internal static bool WaitSafely(Func<Task> taskFn, TimeSpan timeout)
+        public static bool WaitSafely(Func<Task> taskFn, TimeSpan timeout)
         {
             try
             {
@@ -40,7 +40,7 @@ namespace LaunchDarkly.Sdk.Internal
             }
         }
 
-        internal static T WaitSafely<T>(Func<Task<T>> taskFn)
+        public static T WaitSafely<T>(Func<Task<T>> taskFn)
         {
             return _taskFactory.StartNew(taskFn)
                 .Unwrap()
@@ -48,7 +48,7 @@ namespace LaunchDarkly.Sdk.Internal
                 .GetResult();
         }
 
-        private static Exception UnwrapAggregateException(AggregateException e)
+        public static Exception UnwrapAggregateException(AggregateException e)
         {
             if (e.InnerExceptions.Count == 1)
             {
@@ -101,7 +101,7 @@ namespace LaunchDarkly.Sdk.Internal
     ///     }
     /// </code>
     /// </example>
-    internal sealed class MultiNotifier : IDisposable
+    public sealed class MultiNotifier : IDisposable
     {
         private readonly object _lock = new object();
         private CancellationTokenSource _canceller = new CancellationTokenSource();
@@ -168,7 +168,7 @@ namespace LaunchDarkly.Sdk.Internal
     /// <summary>
     /// Used in conjunction with <see cref="MultiNotifier"/>.
     /// </summary>
-    internal struct MultiNotifierToken
+    public struct MultiNotifierToken
     {
         private readonly CancellationToken? _token;
 
