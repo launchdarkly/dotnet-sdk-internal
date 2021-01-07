@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using LaunchDarkly.Logging;
 using WireMock.Logging;
 using WireMock.Server;
@@ -42,6 +43,19 @@ namespace LaunchDarkly.Sdk
             try
             {
                 a(server);
+            }
+            finally
+            {
+                server.Stop();
+            }
+        }
+
+        public static Task WithServer(Func<WireMockServer, Task> a)
+        {
+            var server = NewServer();
+            try
+            {
+                return a(server);
             }
             finally
             {

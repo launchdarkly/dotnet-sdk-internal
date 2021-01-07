@@ -1,6 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Net;
 using System.Net.Http;
+using System.Threading;
+using System.Threading.Tasks;
+using WireMock.RequestBuilders;
+using WireMock.ResponseBuilders;
 using Xunit;
 
 namespace LaunchDarkly.Sdk.Internal.Http
@@ -35,6 +41,7 @@ namespace LaunchDarkly.Sdk.Internal.Http
 
             var hp = HttpProperties.Default
                 .WithHeader("name1", "value1")
+                .WithHeader("Name2", "value2-will-be-replaced")
                 .WithHeader("name2", "value2");
             Assert.Equal(
                 new List<KeyValuePair<string, string>>
@@ -61,15 +68,15 @@ namespace LaunchDarkly.Sdk.Internal.Http
         }
 
         [Fact]
-        public void HttpMessageHandler()
+        public void HttpMessageHandlerFactory()
         {
-            Assert.Null(HttpProperties.Default.HttpMessageHandler);
+            Assert.Null(HttpProperties.Default.HttpMessageHandlerFactory);
 
-            var hmh = new HttpClientHandler();
-            Assert.Same(
-                hmh,
-                HttpProperties.Default.WithHttpMessageHandler(hmh).HttpMessageHandler
-                );
+            HttpMessageHandler hmh = new HttpClientHandler();
+            Func<HttpProperties, HttpMessageHandler> hmhf = _ => hmh;
+
+            var hp = HttpProperties.Default.WithHttpMessageHandlerFactory(hmhf);
+            Assert.Same(hmhf, hp.HttpMessageHandlerFactory);
         }
 
         [Fact]
@@ -106,6 +113,44 @@ namespace LaunchDarkly.Sdk.Internal.Http
                 "X-LaunchDarkly-Wrapper", "x/1.0.0");
         }
 
+        [Fact]
+        public async Task HttpClientUsesCustomHandler()
+        {
+            HttpResponseMessage testResp = new HttpResponseMessage();
+            HttpMessageHandler hmh = new TestHandler(testResp);
+            Func<HttpProperties, HttpMessageHandler> hmhf = _ => hmh;
+
+            var hp = HttpProperties.Default.WithHttpMessageHandlerFactory(hmhf);
+            Assert.Same(hmhf, hp.HttpMessageHandlerFactory);
+
+            using (var client = hp.NewHttpClient())
+            {
+                var resp = await client.GetAsync("http://fake");
+                Assert.Same(testResp, resp);
+            }
+        }
+
+        [Fact]
+        public async Task HttpClientUsesConfiguredProxy()
+        {
+            await TestUtil.WithServer(async fakeProxyServer =>
+            {
+                fakeProxyServer
+                    .Given(Request.Create().UsingGet())
+                    .RespondWith(Response.Create().WithStatusCode(202).WithHeader("abc", "123"));
+
+                var proxy = new WebProxy(fakeProxyServer.Urls[0]);
+                var hp = HttpProperties.Default.WithProxy(proxy);
+
+                using (var client = hp.NewHttpClient())
+                {
+                    var resp = await client.GetAsync("http://fake");
+                    Assert.Equal(202, (int)resp.StatusCode);
+                    Assert.Equal("123", resp.Headers.GetValues("abc").FirstOrDefault());
+                }
+            });
+        }
+
         private void ExpectSingleHeader(HttpProperties hp, string name, string value)
         {
             Assert.Equal(
@@ -115,6 +160,21 @@ namespace LaunchDarkly.Sdk.Internal.Http
                 },
                 hp.BaseHeaders
                 );
+        }
+
+        private class TestHandler : HttpMessageHandler
+        {
+            private readonly HttpResponseMessage _resp;
+
+            public TestHandler(HttpResponseMessage resp)
+            {
+                _resp = resp;
+            }
+
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                return Task.FromResult(_resp);
+            }
         }
     }
 }
