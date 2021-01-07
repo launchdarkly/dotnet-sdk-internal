@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Threading;
@@ -130,6 +129,10 @@ namespace LaunchDarkly.Sdk.Internal.Http
             }
         }
 
+#if !NET46
+        // This test can't be run in .NET Framework because the implementation of WireMock.Net
+        // in .NET Framework doesn't support using it as a fake proxy server in this way.
+
         [Fact]
         public async Task HttpClientUsesConfiguredProxy()
         {
@@ -137,7 +140,7 @@ namespace LaunchDarkly.Sdk.Internal.Http
             {
                 fakeProxyServer
                     .Given(Request.Create().UsingGet())
-                    .RespondWith(Response.Create().WithStatusCode(202).WithHeader("abc", "123"));
+                    .RespondWith(Response.Create().WithStatusCode(418));
 
                 var proxy = new WebProxy(fakeProxyServer.Urls[0]);
                 var hp = HttpProperties.Default.WithProxy(proxy);
@@ -145,11 +148,11 @@ namespace LaunchDarkly.Sdk.Internal.Http
                 using (var client = hp.NewHttpClient())
                 {
                     var resp = await client.GetAsync("http://fake");
-                    Assert.Equal(202, (int)resp.StatusCode);
-                    Assert.Equal("123", resp.Headers.GetValues("abc").FirstOrDefault());
+                    Assert.Equal(418, (int)resp.StatusCode);
                 }
             });
         }
+#endif
 
         private void ExpectSingleHeader(HttpProperties hp, string name, string value)
         {

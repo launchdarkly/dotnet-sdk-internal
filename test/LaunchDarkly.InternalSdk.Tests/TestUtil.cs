@@ -50,12 +50,12 @@ namespace LaunchDarkly.Sdk
             }
         }
 
-        public static Task WithServer(Func<WireMockServer, Task> a)
+        public static async Task WithServer(Func<WireMockServer, Task> a)
         {
             var server = NewServer();
             try
             {
-                return a(server);
+                await a(server);
             }
             finally
             {
