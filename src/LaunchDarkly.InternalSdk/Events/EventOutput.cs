@@ -1,7 +1,8 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 using LaunchDarkly.JsonStream;
-using LaunchDarkly.Sdk.Json;
+
+using static LaunchDarkly.Sdk.Json.LdJsonConverters;
 
 namespace LaunchDarkly.Sdk.Internal.Events
 {
@@ -25,10 +26,6 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
     internal struct EventOutputFormatterScope
     {
-        private static readonly IJsonStreamConverter<LdValue> ValueConverter = new LdJsonConverters.LdValueConverter();
-        private static readonly IJsonStreamConverter<EvaluationReason> ReasonConverter =
-            new LdJsonConverters.EvaluationReasonConverter();
-
         private readonly EventsConfiguration _config;
         private readonly JWriter _jsonWriter;
         private ObjectWriter _obj;
@@ -83,7 +80,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                     WriteUserOrKey(ce.User, false);
                     if (!ce.Data.IsNull)
                     {
-                        ValueConverter.WriteJson(ce.Data, _obj.Name("data"));
+                        LdValueConverter.WriteJsonValue(ce.Data, _obj.Name("data"));
                     }
                     if (ce.MetricValue.HasValue)
                     {
@@ -116,10 +113,10 @@ namespace LaunchDarkly.Sdk.Internal.Events
             {
                 _obj.Name("variation").Int(fe.Variation.Value);
             }
-            ValueConverter.WriteJson(fe.Value, _obj.Name("value"));
+            LdValueConverter.WriteJsonValue(fe.Value, _obj.Name("value"));
             if (!fe.Default.IsNull)
             {
-                ValueConverter.WriteJson(fe.Default, _obj.Name("default"));
+                LdValueConverter.WriteJsonValue(fe.Default, _obj.Name("default"));
             }
             _obj.MaybeName("prereqOf", fe.PrereqOf != null).String(fe.PrereqOf);
             WriteReason(fe.Reason);
@@ -147,7 +144,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 var flagDefault = firstEntry.Value.Default;
 
                 var flagObj = flagsObj.Name(flagKey).Object();
-                ValueConverter.WriteJson(flagDefault, flagObj.Name("default"));
+                LdValueConverter.WriteJsonValue(flagDefault, flagObj.Name("default"));
                 var countersArr = flagObj.Name("counters").Array();
 
                 for (var j = i; j < unprocessedCounters.Length; j++)
@@ -164,7 +161,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                         {
                             counterObj.Name("variation").Int(key.Variation.Value);
                         }
-                        ValueConverter.WriteJson(counter.FlagValue, counterObj.Name("value"));
+                        LdValueConverter.WriteJsonValue(counter.FlagValue, counterObj.Name("value"));
                         if (key.Version.HasValue)
                         {
                             counterObj.Name("version").Int(key.Version.Value);
@@ -232,7 +229,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 var customObj = userObj.Name("custom").Object();
                 foreach (var kv in eu.Custom)
                 {
-                    ValueConverter.WriteJson(kv.Value, customObj.Name(kv.Key));
+                    LdValueConverter.WriteJsonValue(kv.Value, customObj.Name(kv.Key));
                 }
                 customObj.End();
             }
@@ -252,7 +249,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         {
             if (reason.HasValue)
             {
-                ReasonConverter.WriteJson(reason.Value, _obj.Name("reason"));
+                EvaluationReasonConverter.WriteJsonValue(reason.Value, _obj.Name("reason"));
             }
         }
     }
