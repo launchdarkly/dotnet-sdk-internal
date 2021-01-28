@@ -67,7 +67,7 @@ namespace LaunchDarkly.Sdk.Internal.Http
         /// This is only present if a proxy was specified programmatically, not if it was
         /// specified with an environment variable.
         /// </remarks>
-        IWebProxy Proxy { get; }
+        public IWebProxy Proxy { get; }
 
         /// <summary>
         /// The configured TCP socket read timeout.
