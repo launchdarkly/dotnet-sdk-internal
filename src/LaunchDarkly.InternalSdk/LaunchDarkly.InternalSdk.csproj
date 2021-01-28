@@ -26,7 +26,7 @@
 
   <ItemGroup>
     <PackageReference Include="LaunchDarkly.CommonSdk" Version="5.0.0-beta.11" />
-    <PackageReference Include="LaunchDarkly.Logging" Version="1.0.0-alpha.4" />
+    <PackageReference Include="LaunchDarkly.Logging" Version="1.0.0" />
     <PackageReference Include="System.Collections.Immutable" Version="1.7.1" />
   </ItemGroup>
 
