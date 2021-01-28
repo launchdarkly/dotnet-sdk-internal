@@ -1,13 +1,10 @@
 using System;
-using Newtonsoft.Json;
 
 namespace LaunchDarkly.Sdk.Internal.Events
 {
     public sealed class DiagnosticId
     {
-        [JsonProperty(PropertyName = "diagnosticId", NullValueHandling = NullValueHandling.Ignore)]
         public readonly Guid Id;
-        [JsonProperty(PropertyName = "sdkKeySuffix", NullValueHandling = NullValueHandling.Ignore)]
         public readonly string SdkKeySuffix;
 
         public DiagnosticId(string sdkKey, Guid diagnosticId)

@@ -1,10 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <Version>1.0.0-alpha.4</Version>
+    <Version>1.0.0-alpha.5</Version>
     <TargetFrameworks>netstandard2.0;net452</TargetFrameworks>
     <DebugType>portable</DebugType>
     <AssemblyName>LaunchDarkly.InternalSdk</AssemblyName>
     <OutputType>Library</OutputType>
+    <LangVersion>7.3</LangVersion>
     <PackageId>LaunchDarkly.InternalSdk</PackageId>
     <RootNamespace>LaunchDarkly.Sdk.Internal</RootNamespace>
     <Description>LaunchDarkly internal common code for .NET and Xamarin clients</Description>
@@ -17,10 +18,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="LaunchDarkly.CommonSdk" Version="5.0.0-beta.7" />
-    <PackageReference Include="LaunchDarkly.Logging" Version="1.0.0-alpha.2" />
+    <PackageReference Include="LaunchDarkly.CommonSdk" Version="5.0.0-beta.11" />
+    <PackageReference Include="LaunchDarkly.Logging" Version="1.0.0-alpha.4" />
     <PackageReference Include="System.Collections.Immutable" Version="1.7.1" />
-    <PackageReference Include="Newtonsoft.Json" Version="9.0.1" />
   </ItemGroup>
 
   <ItemGroup Condition=" '$(TargetFramework)' == 'net452' ">

@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
+using LaunchDarkly.Sdk.Json;
 using Moq;
 using Xunit;
 
@@ -236,7 +236,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                     EvaluationReason.TargetMatchReason,
                     EvaluationReason.RuleMatchReason(1, "id"),
                     EvaluationReason.PrerequisiteFailedReason("key"),
-                    EvaluationReason.ErrorReason(EvaluationErrorKind.WRONG_TYPE)
+                    EvaluationReason.ErrorReason(EvaluationErrorKind.WrongType)
                 };
                 foreach (var reason in reasons)
                 {
@@ -808,11 +808,6 @@ namespace LaunchDarkly.Sdk.Internal.Events
             }
         }
 
-        private LdValue MakeUserJson(User user)
-        {
-            return LdValue.Parse(JsonConvert.SerializeObject(EventUser.FromUser(user, _config)));
-        }
-
         private void CheckIdentifyEvent(LdValue t, UnixMillisecondTime timestamp, LdValue userJson)
         {
             Assert.Equal(LdValue.Of("identify"), t.Get("kind"));
@@ -850,7 +845,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             Assert.Equal(e.Value, t.Get("value"));
             CheckEventUserOrKey(t, e.User, userJson);
             Assert.Equal(e.Reason.HasValue ?
-                LdValue.Parse(JsonConvert.SerializeObject(e.Reason.Value)) : LdValue.Null,
+                LdValue.Parse(LdJsonSerialization.SerializeObject(e.Reason.Value)) : LdValue.Null,
                 t.Get("reason"));
         }
 
