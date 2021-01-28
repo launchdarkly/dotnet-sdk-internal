@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Immutable;
 using System.Linq;
 using System.Threading.Tasks;
 using LaunchDarkly.Sdk.Internal.Http;
@@ -16,7 +15,6 @@ namespace LaunchDarkly.Sdk.Internal.Events
 {
     public class DefaultEventSenderTest
     {
-        private const string HttpDateFormat = "ddd, dd MMM yyyy HH:mm:ss 'GMT'";
         private const string AuthKey = "fake-sdk-key";
         private const string EventsUriPath = "/post-events-here";
         private const string DiagnosticUriPath = "/post-diagnostic-here";
@@ -116,7 +114,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         [InlineData(408)]
         [InlineData(429)]
         [InlineData(500)]
-        private async void VerifyRecoverableHttpError(int status)
+        public async void VerifyRecoverableHttpError(int status)
         {
             await WithServerAndSender(async (server, es) =>
             {
@@ -150,7 +148,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         [InlineData(408)]
         [InlineData(429)]
         [InlineData(500)]
-        private async void VerifyRecoverableHttpErrorIsOnlyRetriedOnce(int status)
+        public async void VerifyRecoverableHttpErrorIsOnlyRetriedOnce(int status)
         {
             await WithServerAndSender(async (server, es) =>
             {
@@ -185,7 +183,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         [Theory]
         [InlineData(401)]
         [InlineData(403)]
-        private async void VerifyUnrecoverableHttpError(int status)
+        public async void VerifyUnrecoverableHttpError(int status)
         {
             await WithServerAndSender(async (server, es) =>
             {
@@ -200,20 +198,14 @@ namespace LaunchDarkly.Sdk.Internal.Events
             });
         }
 
-        private IResponseBuilder OkResponse()
-        {
-            return Response.Create().WithStatusCode(202);
-        }
+        private IResponseBuilder OkResponse() =>
+            Response.Create().WithStatusCode(202);
 
-        private IRequestBuilder AnalyticsEventRequest()
-        {
-            return Request.Create().WithPath(EventsUriPath).UsingPost();
-        }
+        private IRequestBuilder AnalyticsEventRequest() =>
+            Request.Create().WithPath(EventsUriPath).UsingPost();
 
-        private IRequestBuilder DiagnosticEventRequest()
-        {
-            return Request.Create().WithPath(DiagnosticUriPath).UsingPost();
-        }
+        private IRequestBuilder DiagnosticEventRequest() =>
+            Request.Create().WithPath(DiagnosticUriPath).UsingPost();
 
         private RequestMessage GetLastRequest(WireMockServer server)
         {

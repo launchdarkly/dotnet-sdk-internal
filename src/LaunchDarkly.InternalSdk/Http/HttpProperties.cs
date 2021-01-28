@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Linq;
+using System.Net;
 using System.Net.Http;
 
 namespace LaunchDarkly.Sdk.Internal.Http
@@ -49,9 +51,23 @@ namespace LaunchDarkly.Sdk.Internal.Http
         public Func<Exception, Exception> HttpExceptionConverter { get; }
 
         /// <summary>
-        /// A custom HTTP handler, or null for the standard one.
+        /// A function to create an HTTP handler, or null for the standard one.
         /// </summary>
-        public HttpMessageHandler HttpMessageHandler { get; }
+        /// <remarks>
+        /// If specified, this factory will be called with the other properties as a parameter. This
+        /// may be necessary on platforms like Xamarin where the SDK may want to use a platform-specific
+        /// class that needs to be configured at the handler level.
+        /// </remarks>
+        public Func<HttpProperties, HttpMessageHandler> HttpMessageHandlerFactory { get; }
+
+        /// <summary>
+        /// The proxy configuration, if any.
+        /// </summary>
+        /// <remarks>
+        /// This is only present if a proxy was specified programmatically, not if it was
+        /// specified with an environment variable.
+        /// </remarks>
+        IWebProxy Proxy { get; }
 
         /// <summary>
         /// The configured TCP socket read timeout.
@@ -65,14 +81,16 @@ namespace LaunchDarkly.Sdk.Internal.Http
             ImmutableList<KeyValuePair<string, string>> baseHeaders,
             TimeSpan connectTimeout,
             Func<Exception, Exception> httpExceptionConverter,
-            HttpMessageHandler httpMessageHandler,
+            Func<HttpProperties, HttpMessageHandler> httpMessageHandlerFactory,
+            IWebProxy proxy,
             TimeSpan readTimeout
             )
         {
             BaseHeaders = baseHeaders;
             ConnectTimeout = connectTimeout;
             HttpExceptionConverter = httpExceptionConverter;
-            HttpMessageHandler = httpMessageHandler;
+            HttpMessageHandlerFactory = httpMessageHandlerFactory;
+            Proxy = proxy;
             ReadTimeout = readTimeout;
         }
 
@@ -85,6 +103,7 @@ namespace LaunchDarkly.Sdk.Internal.Http
                 DefaultConnectTimeout,
                 e => e,
                 null,
+                null,
                 DefaultReadTimeout
                 );
 
@@ -93,7 +112,18 @@ namespace LaunchDarkly.Sdk.Internal.Http
                 BaseHeaders,
                 newConnectTimeout,
                 HttpExceptionConverter,
-                HttpMessageHandler,
+                HttpMessageHandlerFactory,
+                Proxy,
+                ReadTimeout
+                );
+
+        public HttpProperties WithHttpMessageHandlerFactory(Func<HttpProperties, HttpMessageHandler> factory) =>
+            new HttpProperties(
+                BaseHeaders,
+                ConnectTimeout,
+                HttpExceptionConverter,
+                factory,
+                Proxy,
                 ReadTimeout
                 );
 
@@ -102,16 +132,18 @@ namespace LaunchDarkly.Sdk.Internal.Http
                 BaseHeaders,
                 ConnectTimeout,
                 newHttpExceptionConverter,
-                HttpMessageHandler,
+                HttpMessageHandlerFactory,
+                Proxy,
                 ReadTimeout
                 );
 
-        public HttpProperties WithHttpMessageHandler(HttpMessageHandler newHttpMessageHandler) =>
+        public HttpProperties WithProxy(IWebProxy newProxy) =>
             new HttpProperties(
                 BaseHeaders,
                 ConnectTimeout,
                 HttpExceptionConverter,
-                newHttpMessageHandler,
+                HttpMessageHandlerFactory,
+                newProxy,
                 ReadTimeout
                 );
 
@@ -120,7 +152,8 @@ namespace LaunchDarkly.Sdk.Internal.Http
                 BaseHeaders,
                 ConnectTimeout,
                 HttpExceptionConverter,
-                HttpMessageHandler,
+                HttpMessageHandlerFactory,
+                Proxy,
                 newReadTimeout
                 );
 
@@ -144,10 +177,12 @@ namespace LaunchDarkly.Sdk.Internal.Http
 
         public HttpProperties WithHeader(string name, string value) =>
             new HttpProperties(
-                BaseHeaders.Add(new KeyValuePair<string, string>(name, value)),
+                BaseHeaders.Where(kv => !string.Equals(kv.Key, name, StringComparison.OrdinalIgnoreCase))
+                    .Concat(ImmutableList.Create(new KeyValuePair<string, string>(name, value))).ToImmutableList(),
                 ConnectTimeout,
                 HttpExceptionConverter,
-                HttpMessageHandler,
+                HttpMessageHandlerFactory,
+                Proxy,
                 ReadTimeout
                 );
 
@@ -163,16 +198,27 @@ namespace LaunchDarkly.Sdk.Internal.Http
                 rh.Add(h.Key, h.Value);
             }
         }
-
         /// <summary>
-        /// Creates an HttpClient instance based on this configuration.
+        /// Creates an <c>HttpClient</c> instance based on this configuration.
         /// </summary>
         /// <remarks>
         /// <para>
-        /// The client will be configured to use the <c>HttpMessageHandler</c> that was specified,
-        /// if any. It will <i>not</i> be configured to send <c>BaseHeaders</c> automatically;
+        /// The client's <c>HttpMessageHandler</c> will be set as follows:
+        /// </para>
+        /// <list type="bullet">
+        /// <item> If <c>HttpMessageHandlerFactory</c> was set, it will be called, passing the
+        /// other properties as a parameter. </item>
+        /// <item> Otherwise, if <c>Proxy</c> was set, we will create a handler instance and set
+        /// its <c>Proxy</c> property. The handler class used in this case is <c>SocketsHttpHandler</c>
+        /// in .NET Core 2.1+ and .NET 5.0+, or <c>HttpClientHandler</c> otherwise. </item>
+        /// <item> If neither of the above was set (or if the factory function returned null),
+        /// the platform default handler will be used: that is, the <c>HttpClient</c> constructor
+        /// will be called without a handler. </item>
+        /// </list>
+        /// <para>
+        /// The client will <i>not</i> be configured to send <c>BaseHeaders</c> automatically;
         /// headers must still be added to each request. This is because we may want to support
-        /// having an application specify its own client instance.
+        /// having an application specify its own HTTP client instance.
         /// </para>
         /// <para>
         /// Currently there is not a standard way to specify connection timeout and socket read
@@ -182,17 +228,26 @@ namespace LaunchDarkly.Sdk.Internal.Http
         /// <c>LaunchDarkly.EventSource</c> does implement read timeouts.
         /// </para>
         /// </remarks>
-        /// <returns></returns>
+        /// <returns>an HTTP client instance</returns>
         public HttpClient NewHttpClient()
         {
-            var httpClient = HttpMessageHandler is null ?
+            var handler = (HttpMessageHandlerFactory ?? DefaultHttpMessageHandlerFactory)(this);
+            return handler is null ?
                 new HttpClient() :
-                new HttpClient(HttpMessageHandler, false);
-            foreach (var h in BaseHeaders)
+                new HttpClient(handler, false);
+        }
+
+        private static HttpMessageHandler DefaultHttpMessageHandlerFactory(HttpProperties props)
+        {
+            if (props.Proxy != null)
             {
-                httpClient.DefaultRequestHeaders.Add(h.Key, h.Value);
+#if NETCOREAPP2_1 || NET5_0
+                return new SocketsHttpHandler { Proxy = props.Proxy };
+#else
+                return new HttpClientHandler { Proxy = props.Proxy };
+#endif
             }
-            return httpClient;
+            return null;
         }
     }
 }
