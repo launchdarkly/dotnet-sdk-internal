@@ -232,14 +232,9 @@ namespace LaunchDarkly.Sdk.Internal.Http
         public HttpClient NewHttpClient()
         {
             var handler = (HttpMessageHandlerFactory ?? DefaultHttpMessageHandlerFactory)(this);
-            var httpClient = handler is null ?
+            return handler is null ?
                 new HttpClient() :
                 new HttpClient(handler, false);
-            foreach (var h in BaseHeaders)
-            {
-                httpClient.DefaultRequestHeaders.Add(h.Key, h.Value);
-            }
-            return httpClient;
         }
 
         private static HttpMessageHandler DefaultHttpMessageHandlerFactory(HttpProperties props)
