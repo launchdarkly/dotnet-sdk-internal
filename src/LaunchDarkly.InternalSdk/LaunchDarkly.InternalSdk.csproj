@@ -17,16 +17,18 @@
     <RootNamespace>LaunchDarkly.Sdk.Internal</RootNamespace>
     <Description>LaunchDarkly internal common code for .NET and Xamarin clients</Description>
     <Company>LaunchDarkly</Company>
+    <Authors>LaunchDarkly</Authors>
+    <Owners>LaunchDarkly</Owners>
     <Copyright>Copyright 2020 LaunchDarkly</Copyright>
-    <LicenseExpression>Apache-2.0</LicenseExpression>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/launchdarkly/dotnet-sdk-internal</PackageProjectUrl>
     <RepositoryUrl>https://github.com/launchdarkly/dotnet-sdk-internal</RepositoryUrl>
     <RepositoryBranch>master</RepositoryBranch>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="LaunchDarkly.CommonSdk" Version="5.0.0-beta.11" />
-    <PackageReference Include="LaunchDarkly.Logging" Version="1.0.0" />
+    <PackageReference Include="LaunchDarkly.CommonSdk" Version="[5.0.1,6.0.0)" />
+    <PackageReference Include="LaunchDarkly.Logging" Version="[1.0.0,2.0.0)" />
     <PackageReference Include="System.Collections.Immutable" Version="1.7.1" />
   </ItemGroup>
 
@@ -36,9 +38,6 @@
     <Reference Include="System.Net.Http" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Http\" />
-  </ItemGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
     <AssemblyOriginatorKeyFile>../../LaunchDarkly.InternalSdk.snk</AssemblyOriginatorKeyFile>
     <SignAssembly>true</SignAssembly>

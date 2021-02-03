@@ -39,3 +39,5 @@ To run all unit tests:
 ```
 dotnet test test/LaunchDarkly.InternalSdk.Tests/LaunchDarkly.InternalSdk.Tests.csproj
 ```
+
+Note that the unit tests can only be run in Debug configuration. There is an `InternalsVisibleTo` directive that allows the test code to access internal members of the library, and assembly strong-naming in the Release configuration interferes with this.
