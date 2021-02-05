@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TestFramework Condition="'$(TESTFRAMEWORK)' == ''">netcoreapp2.1;net452</TestFramework>
+    <TargetFrameworks>$(TESTFRAMEWORK)</TargetFrameworks>
+    <AssemblyName>LaunchDarkly.InternalSdk.Tests</AssemblyName>
+    <RootNamespace>LaunchDarkly.Sdk.Internal</RootNamespace>
+    <Version>1.2.3</Version> <!-- we check for this value in tests -->
+    <ReleaseVersion>1.2.3</ReleaseVersion>
+    <SynchReleaseVersion>false</SynchReleaseVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\LaunchDarkly.InternalSdk\LaunchDarkly.InternalSdk.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="15.3.0-preview-20170628-02" />
+    <PackageReference Include="Moq" Version="4.8.1" />
+    <PackageReference Include="WireMock.Net" Version="1.1.7.0" />
+    <PackageReference Include="xunit" Version="2.2.0" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.2.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Http\" />
+  </ItemGroup>
+</Project>
