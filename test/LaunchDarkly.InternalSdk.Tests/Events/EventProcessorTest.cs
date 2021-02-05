@@ -614,6 +614,30 @@ namespace LaunchDarkly.Sdk.Internal.Events
         }
 
         [Fact]
+        public void AliasEventIsQueued()
+        {
+            var mockSender = MakeMockSender();
+            var captured = EventCapture.From(mockSender);
+
+            using (var ep = MakeProcessor(_config, mockSender))
+            {
+                var ae = new AliasEvent
+                {
+                    Timestamp = _fixedTimestamp,
+                    Key = "newkey",
+                    PreviousKey = "oldkey",
+                    ContextKind = ContextKind.User,
+                    PreviousContextKind = ContextKind.AnonymousUser
+                };
+                ep.RecordAliasEvent(ae);
+                FlushAndWait(ep);
+
+                Assert.Collection(captured.Events,
+                    item => CheckAliasEvent(item, ae));
+            }
+        }
+
+        [Fact]
         public void FinalFlushIsDoneOnDispose()
         {
             var mockSender = MakeMockSender();
@@ -878,6 +902,15 @@ namespace LaunchDarkly.Sdk.Internal.Events
             Assert.Equal(e.Data, t.Get("data"));
             CheckEventUserOrKey(t, e.User, userJson);
             Assert.Equal(e.MetricValue.HasValue ? LdValue.Of(e.MetricValue.Value) : LdValue.Null, t.Get("metricValue"));
+        }
+
+        private void CheckAliasEvent(LdValue t, AliasEvent ae)
+        {
+            Assert.Equal(LdValue.Of("alias"), t.Get("kind"));
+            Assert.Equal(LdValue.Of(ae.Key), t.Get("key"));
+            Assert.Equal(LdValue.Of(ae.PreviousKey), t.Get("previousKey"));
+            Assert.Equal(LdValue.Of(ae.ContextKind.ToIdentifier()), t.Get("contextKind"));
+            Assert.Equal(LdValue.Of(ae.PreviousContextKind.ToIdentifier()), t.Get("previousContextKind"));
         }
 
         private void CheckEventUserOrKey(LdValue o, User user, LdValue userJson)

@@ -88,6 +88,12 @@ namespace LaunchDarkly.Sdk.Internal.Events
                         _obj.Name("metricValue").Double(ce.MetricValue.Value);
                     }
                     break;
+                case AliasEvent ae:
+                    WriteBase("alias", ae.Timestamp, ae.Key);
+                    _obj.Name("contextKind").String(ae.ContextKind.ToIdentifier());
+                    _obj.Name("previousKey").String(ae.PreviousKey);
+                    _obj.Name("previousContextKind").String(ae.PreviousContextKind.ToIdentifier());
+                    break;
                 case EventProcessorInternal.IndexEvent ie:
                     WriteBase("index", ie.Timestamp, null);
                     WriteUserOrKey(ie.User, true);
@@ -200,6 +206,10 @@ namespace LaunchDarkly.Sdk.Internal.Events
             else if (user != null)
             {
                 _obj.Name("userKey").String(user.Key);
+            }
+            if (user != null && user.Anonymous)
+            {
+                _obj.Name("contextKind").String(ContextKind.AnonymousUser.ToIdentifier());
             }
         }
 

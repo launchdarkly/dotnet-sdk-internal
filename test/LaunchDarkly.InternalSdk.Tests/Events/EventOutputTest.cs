@@ -47,7 +47,6 @@ namespace LaunchDarkly.Sdk.Internal.Events
         [Fact]
         public void UnsetUserAttributesAreNotSerialized()
         {
-            var f = new EventOutputFormatter(new EventsConfiguration());
             var user = User.Builder("userkey")
                 .Build();
             var userJson = LdValue.Parse(@"{
@@ -57,9 +56,22 @@ namespace LaunchDarkly.Sdk.Internal.Events
         }
 
         [Fact]
+        public void AnonymousUserIsSerialized()
+        {
+            var user = User.Builder("anon-key")
+                .Anonymous(true)
+                .Build();
+            var userJson = LdValue.Parse(@"{
+                ""key"":""anon-key"",
+                ""anonymous"":true
+                }");
+            TestInlineUserSerialization(user, userJson, new EventsConfiguration());
+            // TestInlineUserSerialization also checks for "contextKind":"anonymousUser"
+        }
+
+        [Fact]
         public void AllAttributesPrivateMakesAttributesPrivate()
         {
-            var f = new EventOutputFormatter(new EventsConfiguration());
             var user = User.Builder("userkey")
                 .Anonymous(true)
                 .Avatar("http://avatar")
@@ -121,37 +133,32 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 .Build();
             var userJson = LdValue.Parse(@"{""key"":""userkey"",""name"":""me""}");
             var f = new EventOutputFormatter(new EventsConfiguration());
-            var emptySummary = new EventSummary();
 
-            var featureEvent = new EvaluationEvent { FlagKey = "flag", User = user };
-            var outputEvent = LdValue.Parse(f.SerializeOutputEvents(new object[] { featureEvent }, emptySummary, out var count)).Get(0);
-            Assert.Equal(1, count);
+            var evalEvent = new EvaluationEvent { FlagKey = "flag", User = user };
+            var outputEvent = SerializeOneEvent(f, evalEvent);
             Assert.Equal(LdValue.Null, outputEvent.Get("user"));
             Assert.Equal(user.Key, outputEvent.Get("userKey").AsString);
 
             // user is always inlined in identify event
             var identifyEvent = new IdentifyEvent { User = user };
-            outputEvent = LdValue.Parse(f.SerializeOutputEvents(new object[] { identifyEvent }, emptySummary, out count)).Get(0);
-            Assert.Equal(1, count);
+            outputEvent = SerializeOneEvent(f, identifyEvent);
             Assert.Equal(LdValue.Null, outputEvent.Get("userKey"));
             Assert.Equal(userJson, outputEvent.Get("user"));
 
             var customEvent = new CustomEvent { EventKey = "customkey", User = user };
-            outputEvent = LdValue.Parse(f.SerializeOutputEvents(new object[] { customEvent }, emptySummary, out count)).Get(0);
-            Assert.Equal(1, count);
+            outputEvent = SerializeOneEvent(f, customEvent);
             Assert.Equal(LdValue.Null, outputEvent.Get("user"));
             Assert.Equal(user.Key, outputEvent.Get("userKey").AsString);
 
             // user is always inlined in index event
             var indexEvent = new IndexEvent { Timestamp = _fixedTimestamp, User = user };
-            outputEvent = LdValue.Parse(f.SerializeOutputEvents(new object[] { indexEvent }, emptySummary, out count)).Get(0);
-            Assert.Equal(1, count);
+            outputEvent = SerializeOneEvent(f, indexEvent);
             Assert.Equal(LdValue.Null, outputEvent.Get("userKey"));
             Assert.Equal(userJson, outputEvent.Get("user"));
         }
 
         [Fact]
-        public void FeatureEventIsSerialized()
+        public void EvaluationEventIsSerialized()
         {
             Func<EvaluationEvent> MakeBasicEvent = () => new EvaluationEvent
             {
@@ -229,6 +236,19 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 ""variation"":1,
                 ""default"":""defaultvalue""
                 }"));
+
+            var eventWithAnonUser = MakeBasicEvent();
+            eventWithAnonUser.User = User.Builder("anon-key").Anonymous(true).Build();
+            TestEventSerialization(eventWithAnonUser, LdValue.Parse(@"{
+                ""kind"":""feature"",
+                ""creationDate"":100000,
+                ""key"":""flag"",
+                ""version"":11,
+                ""userKey"":""anon-key"",
+                ""contextKind"":""anonymousUser"",
+                ""value"":""flagvalue"",
+                ""default"":""defaultvalue""
+                }"));
         }
 
         [Fact]
@@ -293,6 +313,37 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 ""data"":""thing"",
                 ""metricValue"":2.5
                 }"));
+
+            var ceWithAnonUser = MakeBasicEvent();
+            ceWithAnonUser.User = User.Builder("anon-key").Anonymous(true).Build();
+            TestEventSerialization(ceWithAnonUser, LdValue.Parse(@"{
+                ""kind"":""custom"",
+                ""creationDate"":100000,
+                ""key"":""customkey"",
+                ""userKey"":""anon-key"",
+                ""contextKind"":""anonymousUser""
+                }"));
+        }
+
+        [Fact]
+        public void AliasEventIsSerialized()
+        {
+            var ae = new AliasEvent
+            {
+                Timestamp = _fixedTimestamp,
+                Key = "newkey",
+                PreviousKey = "oldkey",
+                ContextKind = ContextKind.User,
+                PreviousContextKind = ContextKind.AnonymousUser
+            };
+            TestEventSerialization(ae, LdValue.Parse(@"{
+                ""kind"":""alias"",
+                ""creationDate"":100000,
+                ""key"":""newkey"",
+                ""previousKey"":""oldkey"",
+                ""contextKind"":""user"",
+                ""previousContextKind"":""anonymousUser""
+                }"));
         }
 
         [Fact]
@@ -350,29 +401,27 @@ namespace LaunchDarkly.Sdk.Internal.Events
         {
             config.InlineUsersInEvents = true;
             var f = new EventOutputFormatter(config);
-            var emptySummary = new EventSummary();
+            var anonUser = User.Builder("anon-key").Anonymous(true).Build();
 
-            var featureEvent = new EvaluationEvent { FlagKey = "flag", User = user };
-            var outputEvent = LdValue.Parse(f.SerializeOutputEvents(new object[] { featureEvent }, emptySummary, out var count)).Get(0);
-            Assert.Equal(1, count);
+            var evalEvent = new EvaluationEvent { FlagKey = "flag", User = user };
+            var outputEvent = SerializeOneEvent(f, evalEvent);
             Assert.Equal(LdValue.Null, outputEvent.Get("userKey"));
             Assert.Equal(expectedJsonValue, outputEvent.Get("user"));
+            Assert.Equal(user.Anonymous ? LdValue.Of("anonymousUser") : LdValue.Null, outputEvent.Get("contextKind"));
 
             var identifyEvent = new IdentifyEvent { User = user };
-            outputEvent = LdValue.Parse(f.SerializeOutputEvents(new object[] { identifyEvent }, emptySummary, out count)).Get(0);
-            Assert.Equal(1, count);
+            outputEvent = SerializeOneEvent(f, identifyEvent);
             Assert.Equal(LdValue.Null, outputEvent.Get("userKey"));
             Assert.Equal(expectedJsonValue, outputEvent.Get("user"));
 
             var customEvent = new CustomEvent { EventKey = "customkey", User = user };
-            outputEvent = LdValue.Parse(f.SerializeOutputEvents(new object[] { customEvent }, emptySummary, out count)).Get(0);
-            Assert.Equal(1, count);
+            outputEvent = SerializeOneEvent(f, customEvent);
             Assert.Equal(LdValue.Null, outputEvent.Get("userKey"));
             Assert.Equal(expectedJsonValue, outputEvent.Get("user"));
+            Assert.Equal(user.Anonymous ? LdValue.Of("anonymousUser") : LdValue.Null, outputEvent.Get("contextKind"));
 
             var indexEvent = new IndexEvent { User = user };
-            outputEvent = LdValue.Parse(f.SerializeOutputEvents(new object[] { indexEvent }, emptySummary, out count)).Get(0);
-            Assert.Equal(1, count);
+            outputEvent = SerializeOneEvent(f, indexEvent);
             Assert.Equal(LdValue.Null, outputEvent.Get("userKey"));
             Assert.Equal(expectedJsonValue, outputEvent.Get("user"));
         }
@@ -430,13 +479,18 @@ namespace LaunchDarkly.Sdk.Internal.Events
             TestInlineUserSerialization(builder.Build(), userJson, config);
         }
 
+        private LdValue SerializeOneEvent(EventOutputFormatter f, object e)
+        {
+            var emptySummary = new EventSummary();
+            var outputEvent = LdValue.Parse(f.SerializeOutputEvents(new object[] { e }, emptySummary, out var count)).Get(0);
+            Assert.Equal(1, count);
+            return outputEvent;
+        }
+
         private void TestEventSerialization(object e, LdValue expectedJsonValue)
         {
             var f = new EventOutputFormatter(new EventsConfiguration());
-            var emptySummary = new EventSummary();
-
-            var outputEvent = LdValue.Parse(f.SerializeOutputEvents(new object[] { e }, emptySummary, out var count)).Get(0);
-            Assert.Equal(1, count);
+            var outputEvent = SerializeOneEvent(f, e);
             Assert.Equal(expectedJsonValue, outputEvent);
         }
     }
