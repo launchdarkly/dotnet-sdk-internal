@@ -2,6 +2,7 @@
 using System.Linq;
 using LaunchDarkly.JsonStream;
 
+using static LaunchDarkly.Sdk.Internal.Events.EventTypes;
 using static LaunchDarkly.Sdk.Json.LdJsonConverters;
 
 namespace LaunchDarkly.Sdk.Internal.Events
@@ -15,7 +16,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             _config = config;
         }
 
-        public string SerializeOutputEvents(EventProcessorInternal.IEvent[] events, EventSummary summary, out int eventCountOut)
+        public string SerializeOutputEvents(object[] events, EventSummary summary, out int eventCountOut)
         {
             var jsonWriter = JWriter.New();
             var scope = new EventOutputFormatterScope(_config, jsonWriter, _config.InlineUsersInEvents);
@@ -46,7 +47,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             _obj = new ObjectWriter();
         }
 
-        public int WriteOutputEvents(EventProcessorInternal.IEvent[] events, EventSummary summary)
+        public int WriteOutputEvents(object[] events, EventSummary summary)
         {
             var eventCount = events.Length;
             var arr = _jsonWriter.Array();
@@ -63,19 +64,19 @@ namespace LaunchDarkly.Sdk.Internal.Events
             return eventCount;
         }
 
-        public void WriteOutputEvent(EventProcessorInternal.IEvent e)
+        public void WriteOutputEvent(object e)
         {
             _obj = _jsonWriter.Object();
             switch (e)
             {
-                case EventProcessorInternal.FeatureRequestEvent fe:
-                    WriteFeatureEvent(fe, false);
+                case EvaluationEvent ee:
+                    WriteEvaluationEvent(ee, false);
                     break;
-                case EventProcessorInternal.IdentifyEvent ie:
-                    WriteBase("identify", ie.Timestamp, e.User?.Key);
+                case IdentifyEvent ie:
+                    WriteBase("identify", ie.Timestamp, ie.User?.Key);
                     WriteUser(ie.User);
                     break;
-                case EventProcessorInternal.CustomEvent ce:
+                case CustomEvent ce:
                     WriteBase("custom", ce.Timestamp, ce.EventKey);
                     WriteUserOrKey(ce.User, false);
                     if (!ce.Data.IsNull)
@@ -92,7 +93,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                     WriteUserOrKey(ie.User, true);
                     break;
                 case EventProcessorInternal.DebugEvent de:
-                    WriteFeatureEvent(de.FromEvent, true);
+                    WriteEvaluationEvent(de.FromEvent, true);
                     break;
                 default:
                     break;
@@ -100,26 +101,26 @@ namespace LaunchDarkly.Sdk.Internal.Events
             _obj.End();
         }
 
-        private void WriteFeatureEvent(EventProcessorInternal.FeatureRequestEvent fe, bool debug)
+        private void WriteEvaluationEvent(EvaluationEvent ee, bool debug)
         {
-            WriteBase(debug ? "debug" : "feature", fe.Timestamp, fe.FlagKey);
+            WriteBase(debug ? "debug" : "feature", ee.Timestamp, ee.FlagKey);
 
-            WriteUserOrKey(fe.User, debug);
-            if (fe.FlagVersion.HasValue)
+            WriteUserOrKey(ee.User, debug);
+            if (ee.FlagVersion.HasValue)
             {
-                _obj.Name("version").Int(fe.FlagVersion.Value);
+                _obj.Name("version").Int(ee.FlagVersion.Value);
             }
-            if (fe.Variation.HasValue)
+            if (ee.Variation.HasValue)
             {
-                _obj.Name("variation").Int(fe.Variation.Value);
+                _obj.Name("variation").Int(ee.Variation.Value);
             }
-            LdValueConverter.WriteJsonValue(fe.Value, _obj.Name("value"));
-            if (!fe.Default.IsNull)
+            LdValueConverter.WriteJsonValue(ee.Value, _obj.Name("value"));
+            if (!ee.Default.IsNull)
             {
-                LdValueConverter.WriteJsonValue(fe.Default, _obj.Name("default"));
+                LdValueConverter.WriteJsonValue(ee.Default, _obj.Name("default"));
             }
-            _obj.MaybeName("prereqOf", fe.PrereqOf != null).String(fe.PrereqOf);
-            WriteReason(fe.Reason);
+            _obj.MaybeName("prereqOf", ee.PrereqOf != null).String(ee.PrereqOf);
+            WriteReason(ee.Reason);
         }
 
         public void WriteSummaryEvent(EventSummary summary)

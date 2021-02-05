@@ -4,6 +4,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using LaunchDarkly.Logging;
 
+using static LaunchDarkly.Sdk.Internal.Events.EventTypes;
+
 namespace LaunchDarkly.Sdk.Internal.Events
 {
     /// <summary>
@@ -110,65 +112,14 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
         #region Public methods
 
-        public void RecordEvaluationEvent(
-            UnixMillisecondTime timestamp,
-            User user,
-            string flagKey,
-            int? flagVersion,
-            int? variation,
-            LdValue value,
-            LdValue defaultValue,
-            EvaluationReason? reason,
-            string prerequisiteOf,
-            bool fullTracking,
-            UnixMillisecondTime? debuggingUntil
-            )
-        {
-            SubmitMessage(new EventProcessorInternal.EventMessage(new EventProcessorInternal.FeatureRequestEvent
-            {
-                Timestamp = timestamp,
-                User = user,
-                FlagKey = flagKey,
-                FlagVersion = flagVersion,
-                Variation = variation,
-                Value = value,
-                Default = defaultValue,
-                Reason = reason,
-                PrereqOf = prerequisiteOf,
-                TrackEvents = fullTracking,
-                DebugEventsUntilDate = debuggingUntil
-            }));
-        }
+        public void RecordEvaluationEvent(EvaluationEvent e) =>
+            SubmitMessage(new EventProcessorInternal.EventMessage(e));
 
-        public void RecordIdentifyEvent(
-            UnixMillisecondTime timestamp,
-            User user
-            )
-        {
-            SubmitMessage(new EventProcessorInternal.EventMessage(new EventProcessorInternal.IdentifyEvent
-            {
-                Timestamp = timestamp,
-                User = user
-            }));
-        }
+        public void RecordIdentifyEvent(IdentifyEvent e) =>
+            SubmitMessage(new EventProcessorInternal.EventMessage(e));
 
-        public void RecordCustomEvent(
-            UnixMillisecondTime timestamp,
-            User user,
-            string eventKey,
-            LdValue data,
-            double? metricValue
-            )
-        {
-            SubmitMessage(new EventProcessorInternal.EventMessage(new EventProcessorInternal.CustomEvent
-            {
-                Timestamp = timestamp,
-                User = user,
-                EventKey = eventKey,
-                Data = data,
-                MetricValue = metricValue
-            }));
-        }
+        public void RecordCustomEvent(CustomEvent e) =>
+            SubmitMessage(new EventProcessorInternal.EventMessage(e));
 
         public void SetOffline(bool offline)
         {

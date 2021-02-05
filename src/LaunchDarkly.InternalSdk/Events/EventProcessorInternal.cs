@@ -5,6 +5,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using LaunchDarkly.Logging;
 
+using static LaunchDarkly.Sdk.Internal.Events.EventTypes;
+
 namespace LaunchDarkly.Sdk.Internal.Events
 {
     internal class EventProcessorInternal
@@ -18,9 +20,9 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
         internal class EventMessage : IEventMessage
         {
-            internal IEvent Event { get; private set; }
+            internal object Event { get; }
 
-            internal EventMessage(IEvent e)
+            internal EventMessage(object e)
             {
                 Event = e;
             }
@@ -56,65 +58,31 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
         internal class ShutdownMessage : SynchronousMessage { }
 
-        internal interface IEvent
-        {
-            UnixMillisecondTime Timestamp { get; }
-            User User { get; }
-        }
+        // DebugEvent and IndexEvent are defined here, instead of publicly in EventTypes, because they
+        // are never passed in via the public API; they're only created internally by EventProcessorInternal.
 
-        internal class FeatureRequestEvent : IEvent
+        internal struct DebugEvent
         {
-            public UnixMillisecondTime Timestamp { get; set; }
-            public User User { get; set; }
-            public string FlagKey { get; set; }
-            public int? FlagVersion { get; set; }
-            public int? Variation { get; set; }
-            public LdValue Value { get; set; }
-            public LdValue Default { get; set; }
-            public EvaluationReason? Reason { get; set; }
-            public string PrereqOf { get; set; }
-            public bool TrackEvents { get; set; }
-            public UnixMillisecondTime? DebugEventsUntilDate { get; set; }
-        }
-
-        internal class IdentifyEvent : IEvent
-        {
-            public UnixMillisecondTime Timestamp { get; set; }
-            public User User { get; set; }
-        }
-
-        internal class CustomEvent : IEvent
-        {
-            public UnixMillisecondTime Timestamp { get; set; }
-            public User User { get; set; }
-            public String EventKey { get; set; }
-            public LdValue Data { get; set; }
-            public double? MetricValue { get; set; }
-        }
-
-        internal class IndexEvent : IEvent
-        {
-            public UnixMillisecondTime Timestamp { get; set; }
-            public User User { get; set; }
-        }
-
-        internal class DebugEvent : IEvent
-        {
-            public FeatureRequestEvent FromEvent { get; set; }
+            public EvaluationEvent FromEvent { get; set; }
             public UnixMillisecondTime Timestamp => FromEvent.Timestamp;
             public User User => FromEvent.User;
         }
 
-
-        internal sealed class FlushPayload
+        internal struct IndexEvent
         {
-            internal IEvent[] Events { get; set; }
+            public UnixMillisecondTime Timestamp { get; set; }
+            public User User { get; set; }
+        }
+
+        internal struct FlushPayload
+        {
+            internal object[] Events { get; set; }
             internal EventSummary Summary { get; set; }
         }
 
         internal sealed class EventBuffer
         {
-            private readonly List<IEvent> _events;
+            private readonly List<object> _events;
             private readonly EventSummarizer _summarizer;
             private readonly IDiagnosticStore _diagnosticStore;
             private readonly int _capacity;
@@ -124,13 +92,13 @@ namespace LaunchDarkly.Sdk.Internal.Events
             internal EventBuffer(int capacity, IDiagnosticStore diagnosticStore, Logger logger)
             {
                 _capacity = capacity;
-                _events = new List<IEvent>();
+                _events = new List<object>();
                 _summarizer = new EventSummarizer();
                 _diagnosticStore = diagnosticStore;
                 _logger = logger;
             }
 
-            internal void AddEvent(IEvent e)
+            internal void AddEvent(object e)
             {
                 if (_events.Count >= _capacity)
                 {
@@ -148,12 +116,9 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 }
             }
 
-            internal void AddToSummary(IEvent e)
+            internal void AddToSummary(EvaluationEvent ee)
             {
-                if (e is FeatureRequestEvent fe)
-                {
-                    _summarizer.SummarizeEvent(fe.Timestamp, fe.FlagKey, fe.FlagVersion, fe.Variation, fe.Value, fe.Default);
-                }
+                _summarizer.SummarizeEvent(ee.Timestamp, ee.FlagKey, ee.FlagVersion, ee.Variation, ee.Value, ee.Default);
             }
 
             internal FlushPayload GetPayload()
@@ -294,50 +259,59 @@ namespace LaunchDarkly.Sdk.Internal.Events
             _flushWorkersCounter.Reset(1);
         }
 
-        private void ProcessEvent(IEvent e, EventBuffer buffer)
+        private void ProcessEvent(object e, EventBuffer buffer)
         {
             if (_disabled)
             {
                 return;
             }
 
-            // Always record the event in the summarizer.
-            buffer.AddToSummary(e);
-
             // Decide whether to add the event to the payload. Feature events may be added twice, once for
             // the event (if tracked) and once for debugging.
-            bool willAddFullEvent;
-            IEvent debugEvent = null;
-            if (e is FeatureRequestEvent fe)
+            bool willAddFullEvent = true;
+            DebugEvent? debugEvent = null;
+            UnixMillisecondTime timestamp;
+            User user = null;
+            switch (e)
             {
-                willAddFullEvent = fe.TrackEvents;
-                if (ShouldDebugEvent(fe))
-                {
-                    debugEvent = new DebugEvent { FromEvent = fe };
-                }
-            }
-            else
-            {
-                willAddFullEvent = true;
+                case EvaluationEvent ee:
+                    buffer.AddToSummary(ee); // only evaluation events go into the summarizer
+                    timestamp = ee.Timestamp;
+                    user = ee.User;
+                    willAddFullEvent = ee.TrackEvents;
+                    if (ShouldDebugEvent(ee))
+                    {
+                        debugEvent = new DebugEvent { FromEvent = ee };
+                    }
+                    break;
+                case IdentifyEvent ie:
+                    timestamp = ie.Timestamp;
+                    user = ie.User;
+                    break;
+                case CustomEvent ce:
+                    timestamp = ce.Timestamp;
+                    user = ce.User;
+                    break;
+                default:
+                    timestamp = new UnixMillisecondTime();
+                    break;
             }
 
             // Tell the user deduplicator, if any, about this user; this may produce an index event.
             // We only need to do this if there is *not* already going to be a full-fidelity event
             // containing an inline user.
-            if (!(willAddFullEvent && _config.InlineUsersInEvents))
+            if (!(willAddFullEvent && _config.InlineUsersInEvents) && user != null
+                && _userDeduplicator != null)
             {
-                if (_userDeduplicator != null && e.User != null)
+                bool needUserEvent = _userDeduplicator.ProcessUser(user);
+                if (needUserEvent && !(e is IdentifyEvent))
                 {
-                    bool needUserEvent = _userDeduplicator.ProcessUser(e.User);
-                    if (needUserEvent && !(e is IdentifyEvent))
-                    {
-                        IndexEvent ie = new IndexEvent { Timestamp = e.Timestamp, User = e.User };
-                        buffer.AddEvent(ie);
-                    }
-                    else if (!(e is IdentifyEvent))
-                    {
-                        _diagnosticStore?.IncrementDeduplicatedUsers();
-                    }
+                    IndexEvent ie = new IndexEvent { Timestamp = timestamp, User = user };
+                    buffer.AddEvent(ie);
+                }
+                else if (!(e is IdentifyEvent))
+                {
+                    _diagnosticStore?.IncrementDeduplicatedUsers();
                 }
             }
 
@@ -351,7 +325,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             }
         }
 
-        private bool ShouldDebugEvent(FeatureRequestEvent fe)
+        private bool ShouldDebugEvent(EvaluationEvent fe)
         {
             if (fe.DebugEventsUntilDate != null)
             {
@@ -363,31 +337,6 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 }
             }
             return false;
-        }
-
-        private bool ShouldTrackFullEvent(IEvent e)
-        {
-            if (e is FeatureRequestEvent fe)
-            {
-                if (fe.TrackEvents)
-                {
-                    return true;
-                }
-                if (fe.DebugEventsUntilDate != null)
-                {
-                    long lastPast = Interlocked.Read(ref _lastKnownPastTime);
-                    if (fe.DebugEventsUntilDate.Value.Value > lastPast &&
-                        fe.DebugEventsUntilDate.Value.Value > UnixMillisecondTime.Now.Value)
-                    {
-                        return true;
-                    }
-                }
-                return false;
-            }
-            else
-            {
-                return true;
-            }
         }
 
         // Grabs a snapshot of the current internal state, and starts a new task to send it to the server.

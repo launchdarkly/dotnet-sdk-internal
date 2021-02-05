@@ -3,6 +3,7 @@ using System.Collections.Immutable;
 using Xunit;
 
 using static LaunchDarkly.Sdk.Internal.Events.EventProcessorInternal;
+using static LaunchDarkly.Sdk.Internal.Events.EventTypes;
 
 namespace LaunchDarkly.Sdk.Internal.Events
 {
@@ -122,28 +123,28 @@ namespace LaunchDarkly.Sdk.Internal.Events
             var f = new EventOutputFormatter(new EventsConfiguration());
             var emptySummary = new EventSummary();
 
-            var featureEvent = new FeatureRequestEvent { FlagKey = "flag", User = user };
-            var outputEvent = LdValue.Parse(f.SerializeOutputEvents(new IEvent[] { featureEvent }, emptySummary, out var count)).Get(0);
+            var featureEvent = new EvaluationEvent { FlagKey = "flag", User = user };
+            var outputEvent = LdValue.Parse(f.SerializeOutputEvents(new object[] { featureEvent }, emptySummary, out var count)).Get(0);
             Assert.Equal(1, count);
             Assert.Equal(LdValue.Null, outputEvent.Get("user"));
             Assert.Equal(user.Key, outputEvent.Get("userKey").AsString);
 
             // user is always inlined in identify event
             var identifyEvent = new IdentifyEvent { User = user };
-            outputEvent = LdValue.Parse(f.SerializeOutputEvents(new IEvent[] { identifyEvent }, emptySummary, out count)).Get(0);
+            outputEvent = LdValue.Parse(f.SerializeOutputEvents(new object[] { identifyEvent }, emptySummary, out count)).Get(0);
             Assert.Equal(1, count);
             Assert.Equal(LdValue.Null, outputEvent.Get("userKey"));
             Assert.Equal(userJson, outputEvent.Get("user"));
 
             var customEvent = new CustomEvent { EventKey = "customkey", User = user };
-            outputEvent = LdValue.Parse(f.SerializeOutputEvents(new IEvent[] { customEvent }, emptySummary, out count)).Get(0);
+            outputEvent = LdValue.Parse(f.SerializeOutputEvents(new object[] { customEvent }, emptySummary, out count)).Get(0);
             Assert.Equal(1, count);
             Assert.Equal(LdValue.Null, outputEvent.Get("user"));
             Assert.Equal(user.Key, outputEvent.Get("userKey").AsString);
 
             // user is always inlined in index event
             var indexEvent = new IndexEvent { Timestamp = _fixedTimestamp, User = user };
-            outputEvent = LdValue.Parse(f.SerializeOutputEvents(new IEvent[] { indexEvent }, emptySummary, out count)).Get(0);
+            outputEvent = LdValue.Parse(f.SerializeOutputEvents(new object[] { indexEvent }, emptySummary, out count)).Get(0);
             Assert.Equal(1, count);
             Assert.Equal(LdValue.Null, outputEvent.Get("userKey"));
             Assert.Equal(userJson, outputEvent.Get("user"));
@@ -152,7 +153,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         [Fact]
         public void FeatureEventIsSerialized()
         {
-            Func<FeatureRequestEvent> MakeBasicEvent = () => new FeatureRequestEvent
+            Func<EvaluationEvent> MakeBasicEvent = () => new EvaluationEvent
             {
                 Timestamp = _fixedTimestamp,
                 FlagKey = "flag",
@@ -200,7 +201,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 ""reason"":{""kind"":""RULE_MATCH"",""ruleIndex"":1,""ruleId"":""id""}
                 }"));
 
-            var feUnknownFlag = new FeatureRequestEvent
+            var feUnknownFlag = new EvaluationEvent
             {
                 Timestamp = fe.Timestamp,
                 FlagKey = "flag",
@@ -316,7 +317,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             summary.NoteTimestamp(UnixMillisecondTime.OfMillis(1002));
 
             var f = new EventOutputFormatter(new EventsConfiguration());
-            var outputEvent = LdValue.Parse(f.SerializeOutputEvents(new IEvent[0], summary, out var count)).Get(0);
+            var outputEvent = LdValue.Parse(f.SerializeOutputEvents(new object[0], summary, out var count)).Get(0);
             Assert.Equal(1, count);
 
             Assert.Equal("summary", outputEvent.Get("kind").AsString);
@@ -351,26 +352,26 @@ namespace LaunchDarkly.Sdk.Internal.Events
             var f = new EventOutputFormatter(config);
             var emptySummary = new EventSummary();
 
-            var featureEvent = new FeatureRequestEvent { FlagKey = "flag", User = user };
-            var outputEvent = LdValue.Parse(f.SerializeOutputEvents(new IEvent[] { featureEvent }, emptySummary, out var count)).Get(0);
+            var featureEvent = new EvaluationEvent { FlagKey = "flag", User = user };
+            var outputEvent = LdValue.Parse(f.SerializeOutputEvents(new object[] { featureEvent }, emptySummary, out var count)).Get(0);
             Assert.Equal(1, count);
             Assert.Equal(LdValue.Null, outputEvent.Get("userKey"));
             Assert.Equal(expectedJsonValue, outputEvent.Get("user"));
 
             var identifyEvent = new IdentifyEvent { User = user };
-            outputEvent = LdValue.Parse(f.SerializeOutputEvents(new IEvent[] { identifyEvent }, emptySummary, out count)).Get(0);
+            outputEvent = LdValue.Parse(f.SerializeOutputEvents(new object[] { identifyEvent }, emptySummary, out count)).Get(0);
             Assert.Equal(1, count);
             Assert.Equal(LdValue.Null, outputEvent.Get("userKey"));
             Assert.Equal(expectedJsonValue, outputEvent.Get("user"));
 
             var customEvent = new CustomEvent { EventKey = "customkey", User = user };
-            outputEvent = LdValue.Parse(f.SerializeOutputEvents(new IEvent[] { customEvent }, emptySummary, out count)).Get(0);
+            outputEvent = LdValue.Parse(f.SerializeOutputEvents(new object[] { customEvent }, emptySummary, out count)).Get(0);
             Assert.Equal(1, count);
             Assert.Equal(LdValue.Null, outputEvent.Get("userKey"));
             Assert.Equal(expectedJsonValue, outputEvent.Get("user"));
 
             var indexEvent = new IndexEvent { User = user };
-            outputEvent = LdValue.Parse(f.SerializeOutputEvents(new IEvent[] { indexEvent }, emptySummary, out count)).Get(0);
+            outputEvent = LdValue.Parse(f.SerializeOutputEvents(new object[] { indexEvent }, emptySummary, out count)).Get(0);
             Assert.Equal(1, count);
             Assert.Equal(LdValue.Null, outputEvent.Get("userKey"));
             Assert.Equal(expectedJsonValue, outputEvent.Get("user"));
@@ -429,12 +430,12 @@ namespace LaunchDarkly.Sdk.Internal.Events
             TestInlineUserSerialization(builder.Build(), userJson, config);
         }
 
-        private void TestEventSerialization(IEvent e, LdValue expectedJsonValue)
+        private void TestEventSerialization(object e, LdValue expectedJsonValue)
         {
             var f = new EventOutputFormatter(new EventsConfiguration());
             var emptySummary = new EventSummary();
 
-            var outputEvent = LdValue.Parse(f.SerializeOutputEvents(new IEvent[] { e }, emptySummary, out var count)).Get(0);
+            var outputEvent = LdValue.Parse(f.SerializeOutputEvents(new object[] { e }, emptySummary, out var count)).Get(0);
             Assert.Equal(1, count);
             Assert.Equal(expectedJsonValue, outputEvent);
         }

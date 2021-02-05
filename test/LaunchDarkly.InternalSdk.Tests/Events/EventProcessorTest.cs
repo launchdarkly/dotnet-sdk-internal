@@ -8,6 +8,7 @@ using LaunchDarkly.Sdk.Json;
 using Moq;
 using Xunit;
 
+using static LaunchDarkly.Sdk.Internal.Events.EventTypes;
 using static LaunchDarkly.Sdk.TestUtil;
 
 namespace LaunchDarkly.Sdk.Internal.Events
@@ -96,14 +97,35 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
         private void RecordEval(EventProcessor ep, TestFlagProperties f, TestEvalProperties e)
         {
-            ep.RecordEvaluationEvent(e.Timestamp, e.User, f.Key, f.Version,
-                e.Variation, e.Value, e.DefaultValue, e.Reason, e.PrereqOf,
-                f.TrackEvents, f.DebugEventsUntilDate);
+            ep.RecordEvaluationEvent(new EvaluationEvent
+            {
+                Timestamp = e.Timestamp,
+                User = e.User,
+                FlagKey = f.Key,
+                FlagVersion = f.Version,
+                Variation = e.Variation,
+                Value = e.Value,
+                Default = e.DefaultValue,
+                Reason = e.Reason,
+                PrereqOf = e.PrereqOf,
+                TrackEvents = f.TrackEvents,
+                DebugEventsUntilDate = f.DebugEventsUntilDate
+            });
         }
+
+        private void RecordIdentify(EventProcessor ep, UnixMillisecondTime time, User user) =>
+            ep.RecordIdentifyEvent(new IdentifyEvent { Timestamp = time, User = user });
 
         private void RecordCustom(EventProcessor ep, TestCustomEventProperties e)
         {
-            ep.RecordCustomEvent(e.Timestamp, e.User, e.Key, e.Data, e.MetricValue);
+            ep.RecordCustomEvent(new CustomEvent
+            {
+                Timestamp = e.Timestamp,
+                User = e.User,
+                EventKey = e.Key,
+                Data = e.Data,
+                MetricValue = e.MetricValue
+            });
         }
 
         private void FlushAndWait(EventProcessor ep)
@@ -120,7 +142,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
             using (var ep = MakeProcessor(_config, mockSender))
             {
-                ep.RecordIdentifyEvent(_fixedTimestamp, _user);
+                RecordIdentify(ep, _fixedTimestamp, _user);
                 FlushAndWait(ep);
 
                 Assert.Collection(captured.Events,
@@ -138,7 +160,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
             using (var ep = MakeProcessor(_config, mockSender))
             {
-                ep.RecordIdentifyEvent(_fixedTimestamp, _user);
+                RecordIdentify(ep, _fixedTimestamp, _user);
                 FlushAndWait(ep);
 
                 Assert.Collection(captured.Events,
@@ -154,7 +176,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
             using (var ep = MakeProcessor(_config, mockSender))
             {
-                ep.RecordIdentifyEvent(_fixedTimestamp, null);
+                RecordIdentify(ep, _fixedTimestamp, null);
                 FlushAndWait(ep);
 
                 Assert.Collection(captured.Events,
@@ -366,7 +388,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             using (var ep = MakeProcessor(_config, mockSender))
             {
                 // Send and flush an event we don't care about, just to set the last server time
-                ep.RecordIdentifyEvent(_fixedTimestamp, User.WithKey("otherUser"));
+                RecordIdentify(ep, _fixedTimestamp, User.WithKey("otherUser"));
                 FlushAndWait(ep);
                 captured.Events.Clear();
 
@@ -397,7 +419,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             using (var ep = MakeProcessor(_config, mockSender))
             {
                 // Send and flush an event we don't care about, just to set the last server time
-                ep.RecordIdentifyEvent(_fixedTimestamp, User.WithKey("otherUser"));
+                RecordIdentify(ep, _fixedTimestamp, User.WithKey("otherUser"));
                 FlushAndWait(ep);
                 captured.Events.Clear();
 
@@ -599,7 +621,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
             using (var ep = MakeProcessor(_config, mockSender))
             {
-                ep.RecordIdentifyEvent(_fixedTimestamp, _user);
+                RecordIdentify(ep, _fixedTimestamp, _user);
 
                 ep.Dispose();
 
@@ -633,7 +655,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             using (var ep = MakeProcessor(_config, mockSender))
             {
                 ep.SetOffline(true);
-                ep.RecordIdentifyEvent(_fixedTimestamp, _user);
+                RecordIdentify(ep, _fixedTimestamp, _user);
                 ep.Flush();
                 ep.WaitUntilInactive();
 
@@ -658,7 +680,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             
             using (var ep = MakeProcessor(_config, mockSender))
             {
-                ep.RecordIdentifyEvent(_fixedTimestamp, _user);
+                RecordIdentify(ep, _fixedTimestamp, _user);
                 ep.Flush();
                 ep.WaitUntilInactive();
 
@@ -681,7 +703,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
             using (var ep = MakeProcessor(_config, mockSender))
             {
-                ep.RecordIdentifyEvent(_fixedTimestamp, _user);
+                RecordIdentify(ep, _fixedTimestamp, _user);
                 ep.Flush();
                 ep.WaitUntilInactive();
 
