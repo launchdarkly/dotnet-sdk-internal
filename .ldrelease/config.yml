@@ -14,4 +14,4 @@ template:
   name: dotnet-windows
   env:
     LD_RELEASE_TEST_TARGET_FRAMEWORK: net452
-    LD_RELEASE_DOCS_TARGET_FRAMEWORK: net46
+    LD_RELEASE_DOCS_TARGET_FRAMEWORK: net452
