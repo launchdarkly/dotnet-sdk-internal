@@ -129,7 +129,7 @@ namespace LaunchDarkly.Sdk.Internal.Http
             }
         }
 
-#if !NET46
+#if !NET452
         // This test can't be run in .NET Framework because the implementation of WireMock.Net
         // in .NET Framework doesn't support using it as a fake proxy server in this way.
 

@@ -64,7 +64,7 @@ jobs:
     environment:
       ASPNETCORE_SUPPRESSSTATUSMESSAGES: true
       BUILDFRAMEWORKS: net452
-      TESTFRAMEWORK: net46 # we build for 4.5.2, but we run in 4.6 so we can use some test libraries that don't work in 4.5
+      TESTFRAMEWORK: net452
     steps:
       - checkout
       - run:
