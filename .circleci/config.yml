@@ -24,8 +24,12 @@ workflows:
           docker-image: mcr.microsoft.com/dotnet/sdk:5.0-focal
           build-target-framework: net5.0
           test-target-framework: net5.0
-      - test-windows-netframework-4-5-2:
+      - test-windows-netframework:
           name: .NET Framework 4.5.2
+          test-target-framework: net452
+      - test-windows-netframework:
+          name: .NET Framework 4.6.1
+          test-target-framework: net461
 
 orbs:
   win: circleci/windows@1.0.0
@@ -57,14 +61,17 @@ jobs:
           name: run tests
           command: dotnet test test/LaunchDarkly.InternalSdk.Tests/LaunchDarkly.InternalSdk.Tests.csproj -f <<parameters.test-target-framework>>
 
-  test-windows-netframework-4-5-2:
+  test-windows-netframework:
+    parameters:
+      test-target-framework:
+        type: string
     executor:
       name: win/vs2019
       shell: powershell.exe
     environment:
       ASPNETCORE_SUPPRESSSTATUSMESSAGES: true
       BUILDFRAMEWORKS: net452
-      TESTFRAMEWORK: net452
+      TESTFRAMEWORK: <<parameters.test-target-framework>>
     steps:
       - checkout
       - run:
@@ -75,4 +82,4 @@ jobs:
           command: dotnet build src/LaunchDarkly.InternalSdk -f net452
       - run:
           name: run tests
-          command: dotnet test test/LaunchDarkly.InternalSdk.Tests/LaunchDarkly.InternalSdk.Tests.csproj -f net46
+          command: dotnet test test/LaunchDarkly.InternalSdk.Tests/LaunchDarkly.InternalSdk.Tests.csproj

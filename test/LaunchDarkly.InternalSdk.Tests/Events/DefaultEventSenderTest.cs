@@ -40,13 +40,12 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
         [Fact]
         public async void AnalyticsEventDataIsSentSuccessfully() =>
-            await WithServerAndSender(Handlers.Status(202).
-                Then(Handlers.Header("Date", "Mon, 24 Mar 2014 12:00:00 GMT")), async (server, es) =>
+            await WithServerAndSender(Handlers.Status(202), async (server, es) =>
             {
                 var result = await es.SendEventDataAsync(EventDataKind.AnalyticsEvents, FakeData, 1);
 
                 Assert.Equal(DeliveryStatus.Succeeded, result.Status);
-                Assert.Equal(new DateTime(2014, 03, 24, 12, 00, 00), result.TimeFromServer);
+                Assert.NotNull(result.TimeFromServer);
 
                 var request = server.Recorder.RequireRequest();
                 Assert.Equal("POST", request.Method);
@@ -55,6 +54,23 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 Assert.NotNull(request.Headers.Get("X-LaunchDarkly-Payload-ID"));
                 Assert.Equal("3", request.Headers.Get("X-LaunchDarkly-Event-Schema"));
             });
+
+#if !NETFRAMEWORK
+        // .NET Framework's implementation of HttpListener, which is used by LaunchDarkly.TestHelpers,
+        // doesn't allow setting a custom value for the Date response header. So even though the
+        // parsing of this header by DefaultEventSender should still work the same in .NET Framework,
+        // we can't test it in this way.
+        [Fact]
+        public async void EventSenderReadsResponseDateTime() =>
+            await WithServerAndSender(Handlers.Status(202).
+                Then(Handlers.Header("Date", "Mon, 24 Mar 2014 12:00:00 GMT")), async (server, es) =>
+                {
+                    var result = await es.SendEventDataAsync(EventDataKind.AnalyticsEvents, FakeData, 1);
+
+                    Assert.Equal(DeliveryStatus.Succeeded, result.Status);
+                    Assert.Equal(new DateTime(2014, 03, 24, 12, 00, 00), result.TimeFromServer);
+                });
+#endif
 
         [Fact]
         public async void NewPayloadIdIsGeneratedForEachPayload() =>
