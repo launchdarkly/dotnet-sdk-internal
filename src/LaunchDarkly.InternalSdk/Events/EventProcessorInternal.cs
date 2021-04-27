@@ -175,7 +175,13 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
             EventBuffer buffer = new EventBuffer(config.EventCapacity > 0 ? config.EventCapacity : 1, _diagnosticStore, _logger);
 
-            Task.Run(() => RunMainLoop(messageQueue, buffer));
+            // Here we use TaskFactory.StartNew instead of Task.Run() because that allows us to specify the
+            // LongRunning option. This option tells the task scheduler that the task is likely to hang on
+            // to a thread for a long time, so it should consider growing the thread pool.
+            Task.Factory.StartNew(
+                () => RunMainLoop(messageQueue, buffer),
+                TaskCreationOptions.LongRunning
+                );
         }
 
         #endregion

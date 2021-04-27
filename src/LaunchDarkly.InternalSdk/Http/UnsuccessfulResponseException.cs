@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace LaunchDarkly.Sdk.Internal
+namespace LaunchDarkly.Sdk.Internal.Http
 {
     public sealed class UnsuccessfulResponseException : Exception
     {

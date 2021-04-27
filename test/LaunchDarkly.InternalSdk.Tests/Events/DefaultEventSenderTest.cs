@@ -1,12 +1,7 @@
 using System;
-using System.Linq;
 using System.Threading.Tasks;
 using LaunchDarkly.Sdk.Internal.Http;
-using WireMock;
-using WireMock.Logging;
-using WireMock.RequestBuilders;
-using WireMock.ResponseBuilders;
-using WireMock.Server;
+using LaunchDarkly.TestHelpers.HttpTest;
 using Xunit;
 
 using static LaunchDarkly.Sdk.TestUtil;
@@ -20,28 +15,23 @@ namespace LaunchDarkly.Sdk.Internal.Events
         private const string DiagnosticUriPath = "/post-diagnostic-here";
         private const string FakeData = "{\"things\":[]}";
 
-        private async Task WithServerAndSender(Func<WireMockServer, DefaultEventSender, Task> a)
+        private async Task WithServerAndSender(Handler handler, Func<HttpServer, DefaultEventSender, Task> a)
         {
-            var server = NewServer();
-            try
+            using (var server = HttpServer.Start(handler))
             {
                 using (var es = MakeSender(server))
                 {
                     await a(server, es);
                 }
             }
-            finally
-            {
-                server.Stop();
-            }
         }
 
-        private DefaultEventSender MakeSender(WireMockServer server)
+        private DefaultEventSender MakeSender(HttpServer server)
         {
             var config = new EventsConfiguration
             {
-                DiagnosticUri = new Uri(new Uri(server.Urls[0]), DiagnosticUriPath),
-                EventsUri = new Uri(new Uri(server.Urls[0]), EventsUriPath),
+                DiagnosticUri = server.Uri.AddPath(DiagnosticUriPath),
+                EventsUri = server.Uri.AddPath(EventsUriPath),
                 RetryInterval = TimeSpan.FromMilliseconds(10)
             };
             var httpProps = HttpProperties.Default.WithAuthorizationKey(AuthKey);
@@ -49,65 +39,56 @@ namespace LaunchDarkly.Sdk.Internal.Events
         }
 
         [Fact]
-        public async void AnalyticsEventDataIsSentSuccessfully()
-        {
-            await WithServerAndSender(async (server, es) =>
+        public async void AnalyticsEventDataIsSentSuccessfully() =>
+            await WithServerAndSender(Handlers.Status(202).
+                Then(Handlers.Header("Date", "Mon, 24 Mar 2014 12:00:00 GMT")), async (server, es) =>
             {
-                server.Given(AnalyticsEventRequest()).RespondWith(OkResponse());
-
                 var result = await es.SendEventDataAsync(EventDataKind.AnalyticsEvents, FakeData, 1);
 
                 Assert.Equal(DeliveryStatus.Succeeded, result.Status);
-                Assert.NotNull(result.TimeFromServer);
-                // Note that we can't provide a specific value for the HTTP Date header and check it against
-                // result.TimeFromServer, because on some platforms the underlying Owin implementation of
-                // WireMock.Net doesn't allow customizing Date.
+                Assert.Equal(new DateTime(2014, 03, 24, 12, 00, 00), result.TimeFromServer);
 
-                var request = GetLastRequest(server);
-                Assert.Equal(AuthKey, request.Headers["Authorization"][0]);
-                Assert.NotNull(request.Headers["X-LaunchDarkly-Payload-ID"][0]);
-                Assert.Equal("3", request.Headers["X-LaunchDarkly-Event-Schema"][0]);
+                var request = server.Recorder.RequireRequest();
+                Assert.Equal("POST", request.Method);
+                Assert.Equal(EventsUriPath, request.Path);
+                Assert.Equal(AuthKey, request.Headers.Get("Authorization"));
+                Assert.NotNull(request.Headers.Get("X-LaunchDarkly-Payload-ID"));
+                Assert.Equal("3", request.Headers.Get("X-LaunchDarkly-Event-Schema"));
             });
-        }
 
         [Fact]
-        public async void NewPayloadIdIsGeneratedForEachPayload()
-        {
-            await WithServerAndSender(async (server, es) =>
+        public async void NewPayloadIdIsGeneratedForEachPayload() =>
+            await WithServerAndSender(Handlers.Status(202), async (server, es) =>
             {
-                server.Given(AnalyticsEventRequest()).RespondWith(OkResponse());
-
                 var result1 = await es.SendEventDataAsync(EventDataKind.AnalyticsEvents, FakeData, 1);
                 var result2 = await es.SendEventDataAsync(EventDataKind.AnalyticsEvents, FakeData, 1);
 
                 Assert.Equal(DeliveryStatus.Succeeded, result1.Status);
                 Assert.Equal(DeliveryStatus.Succeeded, result2.Status);
 
-                var logEntries = server.LogEntries.ToList();
-                Assert.Equal(2, logEntries.Count);
+                var req1 = server.Recorder.RequireRequest();
+                var req2 = server.Recorder.RequireRequest();
                 Assert.NotEqual(
-                    logEntries[0].RequestMessage.Headers["X-LaunchDarkly-Payload-ID"][0],
-                    logEntries[1].RequestMessage.Headers["X-LaunchDarkly-Payload-ID"][0]);
+                    req1.Headers.Get("X-LaunchDarkly-Payload-ID"),
+                    req2.Headers.Get("X-LaunchDarkly-Payload-ID"));
             });
-        }
 
         [Fact]
-        public async void DiagnosticEventDataIsSentSuccessfully()
-        {
-            await WithServerAndSender(async (server, es) =>
+        public async void DiagnosticEventDataIsSentSuccessfully() =>
+            await WithServerAndSender(Handlers.Status(202), async (server, es) =>
             {
-                server.Given(DiagnosticEventRequest()).RespondWith(OkResponse());
                 var result = await es.SendEventDataAsync(EventDataKind.DiagnosticEvent, FakeData, 1);
 
                 Assert.Equal(DeliveryStatus.Succeeded, result.Status);
                 Assert.NotNull(result.TimeFromServer);
 
-                var request = GetLastRequest(server);
-                Assert.Equal(AuthKey, request.Headers["Authorization"][0]);
-                Assert.False(request.Headers.ContainsKey("X-LaunchDarkly-Payload-ID"));
-                Assert.False(request.Headers.ContainsKey("X-LaunchDarkly-Event-Schema"));
+                var request = server.Recorder.RequireRequest();
+                Assert.Equal("POST", request.Method);
+                Assert.Equal(DiagnosticUriPath, request.Path);
+                Assert.Equal(AuthKey, request.Headers.Get("Authorization"));
+                Assert.Null(request.Headers.Get("X-LaunchDarkly-Payload-ID"));
+                Assert.Null(request.Headers.Get("X-LaunchDarkly-Event-Schema"));
             });
-        }
 
         [Theory]
         [InlineData(400)]
@@ -116,30 +97,21 @@ namespace LaunchDarkly.Sdk.Internal.Events
         [InlineData(500)]
         public async void VerifyRecoverableHttpError(int status)
         {
-            await WithServerAndSender(async (server, es) =>
+            var handler = Handlers.Sequential(
+                Handlers.Status(status), // initial request gets error
+                Handlers.Status(202)     // second request gets success
+                );
+            await WithServerAndSender(handler, async (server, es) =>
             {
-                server.Given(AnalyticsEventRequest())
-                    .InScenario("Send Retry")
-                    .WillSetStateTo("Retry")
-                    .RespondWith(Response.Create().WithStatusCode(status));
-
-                server.Given(AnalyticsEventRequest())
-                    .InScenario("Send Retry")
-                    .WhenStateIs("Retry")
-                    .RespondWith(OkResponse());
-
                 var result = await es.SendEventDataAsync(EventDataKind.AnalyticsEvents, FakeData, 1);
                 Assert.Equal(DeliveryStatus.Succeeded, result.Status);
                 Assert.NotNull(result.TimeFromServer);
 
-                var logEntries = server.LogEntries.ToList();
-                Assert.Equal(2, logEntries.Count);
-                Assert.Equal(
-                    logEntries[0].RequestMessage.BodyAsJson,
-                    logEntries[1].RequestMessage.BodyAsJson);
-                Assert.Equal(
-                    logEntries[0].RequestMessage.Headers["X-LaunchDarkly-Payload-ID"][0],
-                    logEntries[1].RequestMessage.Headers["X-LaunchDarkly-Payload-ID"][0]);
+                var req1 = server.Recorder.RequireRequest();
+                var req2 = server.Recorder.RequireRequest();
+                Assert.Equal(req1.Body, req2.Body);
+                Assert.Equal(req1.Headers.Get("X-LaunchDarkly-Payload-ID"),
+                    req2.Headers.Get("X-LaunchDarkly-Payload-ID"));
             });
         }
 
@@ -150,71 +122,40 @@ namespace LaunchDarkly.Sdk.Internal.Events
         [InlineData(500)]
         public async void VerifyRecoverableHttpErrorIsOnlyRetriedOnce(int status)
         {
-            await WithServerAndSender(async (server, es) =>
+            var handler = Handlers.Sequential(
+                Handlers.Status(status), // initial request gets error
+                Handlers.Status(status), // second request also gets error
+                Handlers.Status(202)     // third request would succeed if it got that far
+                );
+
+            await WithServerAndSender(handler, async (server, es) =>
             {
-                server.Given(AnalyticsEventRequest())
-                    .InScenario("Send Retry")
-                    .WillSetStateTo("Retry1")
-                    .RespondWith(Response.Create().WithStatusCode(status));
-
-                server.Given(AnalyticsEventRequest())
-                    .InScenario("Send Retry")
-                    .WhenStateIs("Retry1")
-                    .WillSetStateTo("Retry2")
-                    .RespondWith(Response.Create().WithStatusCode(status));
-
-                server.Given(AnalyticsEventRequest())
-                    .InScenario("Send Retry")
-                    .WhenStateIs("Retry2")
-                    .RespondWith(OkResponse());
-
                 var result = await es.SendEventDataAsync(EventDataKind.AnalyticsEvents, FakeData, 1);
                 Assert.Equal(DeliveryStatus.Failed, result.Status);
                 Assert.Null(result.TimeFromServer);
 
-                var logEntries = server.LogEntries.ToList();
-                Assert.Equal(2, logEntries.Count);
-                Assert.Equal(
-                    logEntries[0].RequestMessage.BodyAsJson,
-                    logEntries[1].RequestMessage.BodyAsJson);
+                var req1 = server.Recorder.RequireRequest();
+                var req2 = server.Recorder.RequireRequest();
+                Assert.Equal(req1.Body, req2.Body);
+                Assert.Equal(req1.Headers.Get("X-LaunchDarkly-Payload-ID"),
+                    req2.Headers.Get("X-LaunchDarkly-Payload-ID"));
+
+                server.Recorder.RequireNoRequests(TimeSpan.FromMilliseconds(100));
             });
         }
 
         [Theory]
         [InlineData(401)]
         [InlineData(403)]
-        public async void VerifyUnrecoverableHttpError(int status)
-        {
-            await WithServerAndSender(async (server, es) =>
+        public async void VerifyUnrecoverableHttpError(int status) =>
+            await WithServerAndSender(Handlers.Status(status), async (server, es) =>
             {
-                server.Given(AnalyticsEventRequest()).RespondWith(Response.Create().WithStatusCode(status));
-
                 var result = await es.SendEventDataAsync(EventDataKind.AnalyticsEvents, FakeData, 1);
                 Assert.Equal(DeliveryStatus.FailedAndMustShutDown, result.Status);
                 Assert.Null(result.TimeFromServer);
 
-                var logEntries = server.LogEntries.ToList();
-                Assert.Single(logEntries);
+                var request = server.Recorder.RequireRequest();
+                server.Recorder.RequireNoRequests(TimeSpan.FromMilliseconds(100));
             });
-        }
-
-        private IResponseBuilder OkResponse() =>
-            Response.Create().WithStatusCode(202);
-
-        private IRequestBuilder AnalyticsEventRequest() =>
-            Request.Create().WithPath(EventsUriPath).UsingPost();
-
-        private IRequestBuilder DiagnosticEventRequest() =>
-            Request.Create().WithPath(DiagnosticUriPath).UsingPost();
-
-        private RequestMessage GetLastRequest(WireMockServer server)
-        {
-            foreach (LogEntry le in server.LogEntries)
-            {
-                return le.RequestMessage;
-            }
-            Assert.True(false, "Did not receive a post request");
-            return null;
-        }
     }
 }

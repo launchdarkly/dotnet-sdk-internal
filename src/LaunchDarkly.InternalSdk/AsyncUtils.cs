@@ -17,14 +17,12 @@ namespace LaunchDarkly.Sdk.Internal
         // code had been modified with ConfigureAwait(false), but that is very error-prone and we can't depend
         // on feature store implementors doing so.
 
-        public static void WaitSafely(Func<Task> taskFn)
-        {
+        public static void WaitSafely(Func<Task> taskFn) =>
             _taskFactory.StartNew(taskFn)
                 .Unwrap()
                 .GetAwaiter()
                 .GetResult();
             // Note, GetResult does not throw AggregateException so we don't need to post-process exceptions
-        }
 
         public static bool WaitSafely(Func<Task> taskFn, TimeSpan timeout)
         {
@@ -40,22 +38,15 @@ namespace LaunchDarkly.Sdk.Internal
             }
         }
 
-        public static T WaitSafely<T>(Func<Task<T>> taskFn)
-        {
-            return _taskFactory.StartNew(taskFn)
+        public static T WaitSafely<T>(Func<Task<T>> taskFn) =>
+            _taskFactory.StartNew(taskFn)
                 .Unwrap()
                 .GetAwaiter()
                 .GetResult();
-        }
 
-        public static Exception UnwrapAggregateException(AggregateException e)
-        {
-            if (e.InnerExceptions.Count == 1)
-            {
-                return e.InnerExceptions[0];
-            }
-            return e;
-        }
+        public static Exception UnwrapAggregateException(AggregateException e) =>
+            e.InnerExceptions.Count == 1 ?
+                e.InnerExceptions[0] : e;
     }
 
     /// <summary>

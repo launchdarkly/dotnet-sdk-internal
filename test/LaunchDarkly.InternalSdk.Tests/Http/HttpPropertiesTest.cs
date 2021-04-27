@@ -4,8 +4,7 @@ using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
-using WireMock.RequestBuilders;
-using WireMock.ResponseBuilders;
+using LaunchDarkly.TestHelpers.HttpTest;
 using Xunit;
 
 namespace LaunchDarkly.Sdk.Internal.Http
@@ -129,30 +128,24 @@ namespace LaunchDarkly.Sdk.Internal.Http
             }
         }
 
-#if !NET452
-        // This test can't be run in .NET Framework because the implementation of WireMock.Net
-        // in .NET Framework doesn't support using it as a fake proxy server in this way.
-
         [Fact]
         public async Task HttpClientUsesConfiguredProxy()
         {
-            await TestUtil.WithServer(async fakeProxyServer =>
+            using (var fakeProxyServer = HttpServer.Start(Handlers.Status(200)))
             {
-                fakeProxyServer
-                    .Given(Request.Create().UsingGet())
-                    .RespondWith(Response.Create().WithStatusCode(418));
-
-                var proxy = new WebProxy(fakeProxyServer.Urls[0]);
+                var proxy = new WebProxy(fakeProxyServer.Uri);
                 var hp = HttpProperties.Default.WithProxy(proxy);
 
                 using (var client = hp.NewHttpClient())
                 {
-                    var resp = await client.GetAsync("http://fake");
-                    Assert.Equal(418, (int)resp.StatusCode);
+                    var resp = await client.GetAsync("http://fake/");
+                    Assert.Equal(200, (int)resp.StatusCode);
+
+                    var request = fakeProxyServer.Recorder.RequireRequest();
+                    Assert.Equal(new Uri("http://fake/"), request.Uri);
                 }
-            });
+            }
         }
-#endif
 
         private void ExpectSingleHeader(HttpProperties hp, string name, string value)
         {
