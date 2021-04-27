@@ -38,9 +38,8 @@ namespace LaunchDarkly.Sdk.Internal
         public static Uri AddQuery(this Uri baseUri, string query)
         {
             var ub = new UriBuilder(baseUri);
-            ub.Query = string.IsNullOrEmpty(ub.Query) ?
-                ("?" + query) :
-                ub.Query + "&" + query;
+            ub.Query = string.IsNullOrEmpty(ub.Query) ? query :
+                ub.Query.TrimStart('?') + "&" + query;
             return ub.Uri;
         }
     }
