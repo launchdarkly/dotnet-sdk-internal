@@ -62,9 +62,20 @@ namespace LaunchDarkly.Sdk.Internal.Http
                 var hp = HttpProperties.Default.WithConnectTimeout(TimeSpan.FromTicks(1));
                 using (var client = hp.NewHttpClient())
                 {
-                    var ex = await Assert.ThrowsAsync(typeof(HttpRequestException), async () =>
+                    // The exact type of exception thrown by SocketsHttpHandler for a connection timeout is
+                    // unfortunately neither consistent nor documented. In practice, it's a TaskCanceledException
+                    // in .NET Core 3.1 and .NET 5.0, whereas in .NET Core 2.1 it's an HttpRequestException that
+                    // wraps a TaskCanceledException.
+                    var ex = await Assert.ThrowsAnyAsync<Exception>(async () =>
                         await client.GetAsync(server.Uri));
-                    Assert.IsType(typeof(TaskCanceledException), ex.InnerException);
+                    if (ex is HttpRequestException)
+                    {
+                        Assert.IsType(typeof(TaskCanceledException), ex.InnerException);
+                    }
+                    else
+                    {
+                        Assert.IsType(typeof(TaskCanceledException), ex);
+                    }
                 }
             }
 
