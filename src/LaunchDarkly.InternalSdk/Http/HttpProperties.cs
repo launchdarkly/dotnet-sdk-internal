@@ -36,7 +36,8 @@ namespace LaunchDarkly.Sdk.Internal.Http
         /// The configured TCP connection timeout.
         /// </summary>
         /// <remarks>
-        /// See comments on <see cref="NewHttpClient"/> regarding timeouts.
+        /// This is used supported in .NET Core and .NET 5+, where <c>SocketsHttpHandler</c> is available.
+        /// It is ignored in other platforms, and it is ignored if a custom HTTP handler is specified.
         /// </remarks>
         public TimeSpan ConnectTimeout { get; }
 
@@ -208,12 +209,12 @@ namespace LaunchDarkly.Sdk.Internal.Http
         /// <list type="bullet">
         /// <item> If <c>HttpMessageHandlerFactory</c> was set, it will be called, passing the
         /// other properties as a parameter. </item>
-        /// <item> Otherwise, if <c>Proxy</c> was set, we will create a handler instance and set
-        /// its <c>Proxy</c> property. The handler class used in this case is <c>SocketsHttpHandler</c>
-        /// in .NET Core 2.1+ and .NET 5.0+, or <c>HttpClientHandler</c> otherwise. </item>
-        /// <item> If neither of the above was set (or if the factory function returned null),
-        /// the platform default handler will be used: that is, the <c>HttpClient</c> constructor
-        /// will be called without a handler. </item>
+        /// <item> Otherwise, in .NET Core and .NET 5.0+, the handler will be set to a
+        /// <c>SocketsHttpHandler</c>, with the specified <c>ConnectTimeout</c> and <c>Proxy</c>
+        /// settings. </item>
+        /// <item> Or, in .NET Framework and .NET Standard, the handler will be left null (to
+        /// use the platform default handler) unless <c>Proxy</c> was set, in which case an
+        /// <c>HttpClientHandler</c> instance is used. </item>
         /// </list>
         /// <para>
         /// The client will <i>not</i> be configured to send <c>BaseHeaders</c> automatically;
@@ -221,11 +222,8 @@ namespace LaunchDarkly.Sdk.Internal.Http
         /// having an application specify its own HTTP client instance.
         /// </para>
         /// <para>
-        /// Currently there is not a standard way to specify connection timeout and socket read
-        /// timeout separately in .NET. The <c>Timeout</c> property in <c>HttpClient</c> applies to
-        /// the entire request-response cycle, and we wouldn't want to set it at the client level
-        /// anyway because we might be using that client for a streaming connection that never ends.
-        /// <c>LaunchDarkly.EventSource</c> does implement read timeouts.
+        /// The <c>ReadTimeout</c> property is not part of the <c>HttpClient</c>; it must be
+        /// implemented separately by the caller.
         /// </para>
         /// </remarks>
         /// <returns>an HTTP client instance</returns>
@@ -239,15 +237,19 @@ namespace LaunchDarkly.Sdk.Internal.Http
 
         private static HttpMessageHandler DefaultHttpMessageHandlerFactory(HttpProperties props)
         {
+#if NETCOREAPP2_1 || NET5_0
+            return new SocketsHttpHandler
+            {
+                ConnectTimeout = props.ConnectTimeout,
+                Proxy = props.Proxy
+            };
+#else
             if (props.Proxy != null)
             {
-#if NETCOREAPP2_1 || NET5_0
-                return new SocketsHttpHandler { Proxy = props.Proxy };
-#else
                 return new HttpClientHandler { Proxy = props.Proxy };
-#endif
             }
             return null;
+#endif
         }
     }
 }
