@@ -9,8 +9,11 @@ using Xunit;
 
 namespace LaunchDarkly.Sdk.Internal.Http
 {
-    public class HttpPropertiesTest
+    public class HttpPropertiesBuildingTest
     {
+        // These tests don't do any HTTP, they just verify that the methods for setting properties
+        // work as intended.
+
         [Fact]
         public void AuthorizationKey()
         {
@@ -111,42 +114,6 @@ namespace LaunchDarkly.Sdk.Internal.Http
                 "X-LaunchDarkly-Wrapper", "x/1.0.0");
         }
 
-        [Fact]
-        public async Task HttpClientUsesCustomHandler()
-        {
-            HttpResponseMessage testResp = new HttpResponseMessage();
-            HttpMessageHandler hmh = new TestHandler(testResp);
-            Func<HttpProperties, HttpMessageHandler> hmhf = _ => hmh;
-
-            var hp = HttpProperties.Default.WithHttpMessageHandlerFactory(hmhf);
-            Assert.Same(hmhf, hp.HttpMessageHandlerFactory);
-
-            using (var client = hp.NewHttpClient())
-            {
-                var resp = await client.GetAsync("http://fake");
-                Assert.Same(testResp, resp);
-            }
-        }
-
-        [Fact]
-        public async Task HttpClientUsesConfiguredProxy()
-        {
-            using (var fakeProxyServer = HttpServer.Start(Handlers.Status(200)))
-            {
-                var proxy = new WebProxy(fakeProxyServer.Uri);
-                var hp = HttpProperties.Default.WithProxy(proxy);
-
-                using (var client = hp.NewHttpClient())
-                {
-                    var resp = await client.GetAsync("http://fake/");
-                    Assert.Equal(200, (int)resp.StatusCode);
-
-                    var request = fakeProxyServer.Recorder.RequireRequest();
-                    Assert.Equal(new Uri("http://fake/"), request.Uri);
-                }
-            }
-        }
-
         private void ExpectSingleHeader(HttpProperties hp, string name, string value)
         {
             Assert.Equal(
@@ -156,21 +123,6 @@ namespace LaunchDarkly.Sdk.Internal.Http
                 },
                 hp.BaseHeaders
                 );
-        }
-
-        private class TestHandler : HttpMessageHandler
-        {
-            private readonly HttpResponseMessage _resp;
-
-            public TestHandler(HttpResponseMessage resp)
-            {
-                _resp = resp;
-            }
-
-            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-            {
-                return Task.FromResult(_resp);
-            }
         }
     }
 }
