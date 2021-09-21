@@ -2,6 +2,16 @@
 
 All notable changes to `LaunchDarkly.InternalSdk` will be documented in this file. For full release notes for the projects that depend on this project, see their respective changelogs. This file describes changes only to the common code. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [2.0.0] - 2021-09-21
+### Added:
+- `StateMonitor`, `TaskExecutor`.
+
+### Changed:
+- Moved `AtomicBoolean` and `AsyncUtils` into new namespace `LaunchDarkly.Sdk.Internal.Concurrent`.
+
+### Removed:
+- `MultiNotifier` (obviated by `StateMonitor`).
+
 ## [1.1.2] - 2021-06-07
 ### Fixed:
 - Updated minimum `LaunchDarkly.CommonSdk` version to latest patch, to exclude versions of `LaunchDarkly.JsonStream` with a known parsing bug.
