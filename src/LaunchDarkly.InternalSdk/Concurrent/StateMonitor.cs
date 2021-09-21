@@ -148,8 +148,8 @@ namespace LaunchDarkly.Sdk.Internal.Concurrent
         /// <para>
         /// This method calls the test function while holding a lock on the lock object specified
         /// in the constructor. If the return value is <see langword="true"/>, it immediately
-        /// returns whatever the current state value is>; otherwise, it sleeps until the next time
-        /// <see cref="NotifyStateChanged"/> is called and then repeats the check-- unless the
+        /// returns whatever the current state value is; otherwise, it sleeps until the next time
+        /// <see cref="Update(UpdateT, out StateT)"/> is called and then repeats the check-- unless the
         /// timeout expires, in which case it returns <see langword="null"/>.
         /// </para>
         /// </remarks>
