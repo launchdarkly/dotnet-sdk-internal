@@ -70,11 +70,11 @@ namespace LaunchDarkly.Sdk.Internal.Http
                         await client.GetAsync(server.Uri));
                     if (ex is HttpRequestException)
                     {
-                        Assert.IsType(typeof(TaskCanceledException), ex.InnerException);
+                        Assert.IsType<TaskCanceledException>(ex.InnerException);
                     }
                     else
                     {
-                        Assert.IsType(typeof(TaskCanceledException), ex);
+                        Assert.IsType<TaskCanceledException>(ex);
                     }
                 }
             }

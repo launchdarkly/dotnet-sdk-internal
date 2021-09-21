@@ -1,6 +1,6 @@
 ﻿using Xunit;
 
-namespace LaunchDarkly.Sdk.Internal
+namespace LaunchDarkly.Sdk.Internal.Concurrent
 {
     public class AtomicBooleanTest
     {

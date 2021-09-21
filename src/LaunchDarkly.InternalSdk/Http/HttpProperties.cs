@@ -207,14 +207,14 @@ namespace LaunchDarkly.Sdk.Internal.Http
         /// The client's <c>HttpMessageHandler</c> will be set as follows:
         /// </para>
         /// <list type="bullet">
-        /// <item> If <c>HttpMessageHandlerFactory</c> was set, it will be called, passing the
-        /// other properties as a parameter. </item>
-        /// <item> Otherwise, in .NET Core and .NET 5.0+, the handler will be set to a
+        /// <item><description> If <c>HttpMessageHandlerFactory</c> was set, it will be called, passing the
+        /// other properties as a parameter. </description></item>
+        /// <item><description> Otherwise, in .NET Core and .NET 5.0+, the handler will be set to a
         /// <c>SocketsHttpHandler</c>, with the specified <c>ConnectTimeout</c> and <c>Proxy</c>
-        /// settings. </item>
-        /// <item> Or, in .NET Framework and .NET Standard, the handler will be left null (to
+        /// settings. </description></item>
+        /// <item><description> Or, in .NET Framework and .NET Standard, the handler will be left null (to
         /// use the platform default handler) unless <c>Proxy</c> was set, in which case an
-        /// <c>HttpClientHandler</c> instance is used. </item>
+        /// <c>HttpClientHandler</c> instance is used. </description></item>
         /// </list>
         /// <para>
         /// The client will <i>not</i> be configured to send <c>BaseHeaders</c> automatically;
