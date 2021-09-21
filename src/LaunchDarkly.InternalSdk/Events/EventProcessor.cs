@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
 using LaunchDarkly.Logging;
+using LaunchDarkly.Sdk.Internal.Concurrent;
 
 using static LaunchDarkly.Sdk.Internal.Events.EventTypes;
 

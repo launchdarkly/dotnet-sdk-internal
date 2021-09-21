@@ -1,3 +1,5 @@
+version: 2
+
 repo:
   public: dotnet-sdk-internal
   private: dotnet-sdk-internal-private
@@ -6,12 +8,10 @@ publications:
   - url: https://nuget.org/packages/LaunchDarkly.InternalSdk
     description: NuGet
 
-circleci:
-  windows:
-    context: org-global
-
-template:
-  name: dotnet-windows
-  env:
-    LD_RELEASE_TEST_TARGET_FRAMEWORK: net452
-    LD_RELEASE_DOCS_TARGET_FRAMEWORK: net452
+jobs:
+  - docker: {}
+    template:
+      name: dotnet-linux
+    env:
+      LD_RELEASE_TEST_TARGET_FRAMEWORK: net50
+      LD_RELEASE_DOCS_TARGET_FRAMEWORK: netstandard2.0
