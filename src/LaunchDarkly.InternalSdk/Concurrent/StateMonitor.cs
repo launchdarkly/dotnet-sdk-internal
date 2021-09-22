@@ -13,9 +13,9 @@ namespace LaunchDarkly.Sdk.Internal.Concurrent
     /// <typeparam name="StateT">a value type representing the current state</typeparam>
     /// <typeparam name="UpdateT">either the same as <c>StateT</c>, or any other type that
     /// you want to use as the parameter for <see cref="Update(UpdateT)"/></typeparam>
-    internal sealed class StateMonitor<StateT, UpdateT> : IDisposable where StateT : struct
+    public sealed class StateMonitor<StateT, UpdateT> : IDisposable where StateT : struct
     {
-        internal class Awaiter
+        internal sealed class Awaiter
         {
             internal Func<StateT, bool> TestFn { get; set; }
             internal TaskCompletionSource<StateT> Completion { get; set; }
