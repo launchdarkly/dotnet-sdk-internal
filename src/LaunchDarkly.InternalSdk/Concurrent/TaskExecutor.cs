@@ -14,7 +14,7 @@ namespace LaunchDarkly.Sdk.Internal
     /// scheduling behavior of <c>Task.Run()</c> may not always be what we want. Second, this provides
     /// better error logging.
     /// </remarks>
-    internal sealed class TaskExecutor
+    public sealed class TaskExecutor
     {
         private readonly object _eventSender;
         private readonly Logger _log;
@@ -24,7 +24,7 @@ namespace LaunchDarkly.Sdk.Internal
         /// </summary>
         /// <param name="eventSender">object to use as the <c>sender</c> parameter when firing events</param>
         /// <param name="log">logger for logging errors from worker tasks</param>
-        internal TaskExecutor(object eventSender, Logger log)
+        public TaskExecutor(object eventSender, Logger log)
         {
             _eventSender = eventSender;
             _log = log;
