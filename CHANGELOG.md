@@ -2,6 +2,10 @@
 
 All notable changes to `LaunchDarkly.InternalSdk` will be documented in this file. For full release notes for the projects that depend on this project, see their respective changelogs. This file describes changes only to the common code. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [2.1.1] - 2021-10-05
+### Changed:
+- Updated dependency versions to keep in sync with dependencies of `LaunchDarkly.ServerSdk`.
+
 ## [2.1.0] - 2021-09-21
 ### Added:
 - Made `StateMonitor` and `TaskExecutor` public; they had mistakenly been marked internal.
