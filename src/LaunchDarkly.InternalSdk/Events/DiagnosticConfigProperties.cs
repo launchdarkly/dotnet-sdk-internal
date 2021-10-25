@@ -19,7 +19,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         /// <param name="value">the value</param>
         /// <returns>the builder</returns>
         public static LdValue.ObjectBuilder WithAutoAliasingOptOut(this LdValue.ObjectBuilder builder, bool value) =>
-            builder.Add("autoAliasingOptOut", value);
+            builder.Set("autoAliasingOptOut", value);
 
         /// <summary>
         /// Adds the standard properties for events configuration.
@@ -33,12 +33,12 @@ namespace LaunchDarkly.Sdk.Internal.Events
             EventsConfiguration config,
             bool customEventsBaseUri
             ) =>
-            builder.Add("allAttributesPrivate", config.AllAttributesPrivate)
-                .Add("customEventsURI", customEventsBaseUri)
-                .Add("diagnosticRecordingIntervalMillis", config.DiagnosticRecordingInterval.TotalMilliseconds)
-                .Add("eventsCapacity", config.EventCapacity)
-                .Add("eventsFlushIntervalMillis", config.EventFlushInterval.TotalMilliseconds)
-                .Add("inlineUsersInEvents", config.InlineUsersInEvents);
+            builder.Set("allAttributesPrivate", config.AllAttributesPrivate)
+                .Set("customEventsURI", customEventsBaseUri)
+                .Set("diagnosticRecordingIntervalMillis", config.DiagnosticRecordingInterval.TotalMilliseconds)
+                .Set("eventsCapacity", config.EventCapacity)
+                .Set("eventsFlushIntervalMillis", config.EventFlushInterval.TotalMilliseconds)
+                .Set("inlineUsersInEvents", config.InlineUsersInEvents);
 
         /// <summary>
         /// Adds the standard properties for HTTP configuration.
@@ -47,10 +47,10 @@ namespace LaunchDarkly.Sdk.Internal.Events
         /// <param name="props">the standard HTTP properties</param>
         /// <returns>the builder</returns>
         public static LdValue.ObjectBuilder WithHttpProperties(this LdValue.ObjectBuilder builder, HttpProperties props) =>
-            builder.Add("connectTimeoutMillis", props.ConnectTimeout.TotalMilliseconds)
-                .Add("socketTimeoutMillis", props.ReadTimeout.TotalMilliseconds)
-                .Add("usingProxy", DetectProxy(props))
-                .Add("usingProxyAuthenticator", DetectProxyAuth(props));
+            builder.Set("connectTimeoutMillis", props.ConnectTimeout.TotalMilliseconds)
+                .Set("socketTimeoutMillis", props.ReadTimeout.TotalMilliseconds)
+                .Set("usingProxy", DetectProxy(props))
+                .Set("usingProxyAuthenticator", DetectProxyAuth(props));
 
         /// <summary>
         /// Adds the standard <c>startWaitMillis</c> property.
@@ -59,7 +59,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         /// <param name="value">the value</param>
         /// <returns>the builder</returns>
         public static LdValue.ObjectBuilder WithStartWaitTime(this LdValue.ObjectBuilder builder, TimeSpan value) =>
-            builder.Add("startWaitMillis", value.TotalMilliseconds);
+            builder.Set("startWaitMillis", value.TotalMilliseconds);
 
         /// <summary>
         /// Adds the standard properties for streaming.
@@ -75,10 +75,10 @@ namespace LaunchDarkly.Sdk.Internal.Events
             bool customPollingBaseUri,
             TimeSpan initialReconnectDelay
             ) =>
-            builder.Add("streamingDisabled", false)
-                .Add("customBaseURI", customPollingBaseUri)
-                .Add("customStreamURI", customStreamingBaseUri)
-                .Add("reconnectTimeMillis", initialReconnectDelay.TotalMilliseconds);
+            builder.Set("streamingDisabled", false)
+                .Set("customBaseURI", customPollingBaseUri)
+                .Set("customStreamURI", customStreamingBaseUri)
+                .Set("reconnectTimeMillis", initialReconnectDelay.TotalMilliseconds);
 
         /// <summary>
         /// Adds the standard properties for polling.
@@ -92,11 +92,9 @@ namespace LaunchDarkly.Sdk.Internal.Events
             bool customPollingBaseUri,
             TimeSpan pollingInterval
             ) =>
-            builder.Add("streamingDisabled", true)
-                .Add("customBaseURI", customPollingBaseUri)
-                .Add("customStreamURI", false)
-                .Add("pollingIntervalMillis", pollingInterval.TotalMilliseconds)
-                .Add("reconnectTimeMillis", LdValue.Null); // reconnectTimeMillis is for streaming only
+            builder.Set("streamingDisabled", true)
+                .Set("customBaseURI", customPollingBaseUri)
+                .Set("pollingIntervalMillis", pollingInterval.TotalMilliseconds);
 
         // DetectProxy and DetectProxyAuth do not cover every mechanism that could be used to configure
         // a proxy; for instance, there is HttpClient.DefaultProxy, which only exists in .NET Core 3.x and
