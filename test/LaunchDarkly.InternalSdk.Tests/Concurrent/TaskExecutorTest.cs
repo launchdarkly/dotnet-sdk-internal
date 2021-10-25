@@ -72,6 +72,32 @@ namespace LaunchDarkly.Sdk.Internal.Concurrent
         }
 
         [Fact]
+        public void CanUseCustomEventDispatcher()
+        {
+            var actions = new EventSink<Action>();
+            var customExecutor = new TaskExecutor(MyEventSender, actions.Enqueue, testLogger);
+
+            var values1 = new EventSink<string>();
+            var values2 = new EventSink<string>();
+            myEvent += values1.Add;
+            myEvent += values2.Add;
+
+            customExecutor.ScheduleEvent("hello", myEvent);
+
+            values1.ExpectNoValue();
+            values2.ExpectNoValue();
+
+            var action1 = actions.ExpectValue();
+            var action2 = actions.ExpectValue();
+            actions.ExpectNoValue();
+
+            action1();
+            action2();
+            Assert.Equal("hello", values1.ExpectValue());
+            Assert.Equal("hello", values2.ExpectValue());
+        }
+
+        [Fact]
         public void RepeatingTask()
         {
             var values = new BlockingCollection<int>();
