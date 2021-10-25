@@ -17,6 +17,7 @@ namespace LaunchDarkly.Sdk.Internal
     public sealed class TaskExecutor
     {
         private readonly object _eventSender;
+        private readonly Action<Action> _eventHandlerDispatcher;
         private readonly Logger _log;
 
         /// <summary>
@@ -24,9 +25,26 @@ namespace LaunchDarkly.Sdk.Internal
         /// </summary>
         /// <param name="eventSender">object to use as the <c>sender</c> parameter when firing events</param>
         /// <param name="log">logger for logging errors from worker tasks</param>
-        public TaskExecutor(object eventSender, Logger log)
+        public TaskExecutor(object eventSender, Logger log) : this(eventSender, null, log) { }
+
+        /// <summary>
+        /// Creates an instance, specifying custom event dispatch logic.
+        /// </summary>
+        /// <remarks>
+        /// The <paramref name="eventHandlerDispatcher"/> parameter, if not null, specifies what to do when
+        /// calling a lambda that executes an application-defined event handler. The default behavior for
+        /// this is that we call `Task.Run` for each handler invocation to run it as a separate background
+        /// task. In the client-side .NET SDK, we may want to use a different approach (such as invoking the
+        /// handler on the UI thread, for mobile devices).
+        /// </remarks>
+        /// <param name="eventSender">object to use as the <c>sender</c> parameter when firing events</param>
+        /// <param name="eventHandlerDispatcher">custom logic to use when executing an event handler,
+        /// or <see langword="null"/> to use the default behavior</param>
+        /// <param name="log">logger for logging errors from worker tasks</param>
+        public TaskExecutor(object eventSender, Action<Action> eventHandlerDispatcher, Logger log)
         {
             _eventSender = eventSender;
+            _eventHandlerDispatcher = eventHandlerDispatcher ?? DefaultEventHandlerDispatcher;
             _log = log;
         }
 
@@ -53,7 +71,7 @@ namespace LaunchDarkly.Sdk.Internal
             _log.Debug("scheduling task to send {0} to {1}", eventArgs, handlers);
             foreach (var handler in delegates)
             {
-                _ = Task.Run(() =>
+                _eventHandlerDispatcher(() =>
                 {
                     _log.Debug("sending {0}", eventArgs);
                     try
@@ -72,6 +90,11 @@ namespace LaunchDarkly.Sdk.Internal
                     }
                 });
             }
+        }
+
+        private static void DefaultEventHandlerDispatcher(Action invokeHandler)
+        {
+            _ = Task.Run(invokeHandler);
         }
 
         /// <summary>
