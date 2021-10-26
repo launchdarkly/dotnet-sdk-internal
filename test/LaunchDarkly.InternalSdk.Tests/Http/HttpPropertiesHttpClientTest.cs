@@ -49,6 +49,26 @@ namespace LaunchDarkly.Sdk.Internal.Http
             }
         }
 
+        [Fact]
+        public async Task MessageHandlerUsesConfiguredProxy()
+        {
+            using (var fakeProxyServer = HttpServer.Start(Handlers.Status(200)))
+            {
+                var proxy = new WebProxy(fakeProxyServer.Uri);
+                var hp = HttpProperties.Default.WithProxy(proxy);
+                var handler = hp.NewHttpMessageHandler();
+
+                using (var client = new HttpClient(handler))
+                {
+                    var resp = await client.GetAsync("http://fake/");
+                    Assert.Equal(200, (int)resp.StatusCode);
+
+                    var request = fakeProxyServer.Recorder.RequireRequest();
+                    Assert.Equal(new Uri("http://fake/"), request.Uri);
+                }
+            }
+        }
+
 #if NETCOREAPP || NET5_0
         [Fact]
         public async Task ClientUsesConnectTimeout()
