@@ -2,6 +2,10 @@
 
 All notable changes to `LaunchDarkly.InternalSdk` will be documented in this file. For full release notes for the projects that depend on this project, see their respective changelogs. This file describes changes only to the common code. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [2.3.0] - 2021-10-27
+### Added:
+- `HttpProperties.NewHttpMessageHandler()`
+
 ## [2.2.0] - 2021-10-25
 ### Added:
 - In `TaskExecutor`, there is a new parameter for controlling how events are dispatched that will be used by the client-side .NET SDK.
