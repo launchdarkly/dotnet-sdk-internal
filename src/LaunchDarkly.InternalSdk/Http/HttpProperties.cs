@@ -235,6 +235,14 @@ namespace LaunchDarkly.Sdk.Internal.Http
                 new HttpClient(handler, false);
         }
 
+        /// <summary>
+        /// Applies the <c>HttpMessageHandler</c>, <c>Proxy</c>, and <c>ConnectTimeout</c> settings
+        /// as appropriate to create a message handler.
+        /// </summary>
+        /// <returns>the fully configured handler</returns>
+        public HttpMessageHandler NewHttpMessageHandler() =>
+            (HttpMessageHandlerFactory ?? DefaultHttpMessageHandlerFactory)(this);
+        
         private static HttpMessageHandler DefaultHttpMessageHandlerFactory(HttpProperties props)
         {
 #if NETCOREAPP2_1 || NET5_0
