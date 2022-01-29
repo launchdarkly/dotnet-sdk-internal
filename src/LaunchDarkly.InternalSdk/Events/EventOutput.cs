@@ -78,7 +78,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                     break;
                 case CustomEvent ce:
                     WriteBase("custom", ce.Timestamp, ce.EventKey);
-                    WriteUserOrKey(ce.User, false);
+                    WriteUserOrKey(ce.User, false, true);
                     if (!ce.Data.IsNull)
                     {
                         LdValueConverter.WriteJsonValue(ce.Data, _obj.Name("data"));
@@ -96,7 +96,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                     break;
                 case EventProcessorInternal.IndexEvent ie:
                     WriteBase("index", ie.Timestamp, null);
-                    WriteUserOrKey(ie.User, true);
+                    WriteUserOrKey(ie.User, true, false);
                     break;
                 case EventProcessorInternal.DebugEvent de:
                     WriteEvaluationEvent(de.FromEvent, true);
@@ -111,7 +111,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         {
             WriteBase(debug ? "debug" : "feature", ee.Timestamp, ee.FlagKey);
 
-            WriteUserOrKey(ee.User, debug);
+            WriteUserOrKey(ee.User, debug, true);
             if (ee.FlagVersion.HasValue)
             {
                 _obj.Name("version").Int(ee.FlagVersion.Value);
@@ -197,7 +197,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             _obj.MaybeName("key", key != null).String(key);
         }
 
-        private void WriteUserOrKey(User user, bool forceInline)
+        private void WriteUserOrKey(User user, bool forceInline, bool includeContextKind)
         {
             if (forceInline || _config.InlineUsersInEvents)
             {
@@ -207,8 +207,9 @@ namespace LaunchDarkly.Sdk.Internal.Events
             {
                 _obj.Name("userKey").String(user.Key);
             }
-            if (user != null && user.Anonymous)
+            if (includeContextKind && user != null && user.Anonymous)
             {
+                // only "feature", "debug", and "custom" events should ever have contextKind
                 _obj.Name("contextKind").String(ContextKind.AnonymousUser.ToIdentifier());
             }
         }
