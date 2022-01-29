@@ -401,7 +401,6 @@ namespace LaunchDarkly.Sdk.Internal.Events
         {
             config.InlineUsersInEvents = true;
             var f = new EventOutputFormatter(config);
-            var anonUser = User.Builder("anon-key").Anonymous(true).Build();
 
             var evalEvent = new EvaluationEvent { FlagKey = "flag", User = user };
             var outputEvent = SerializeOneEvent(f, evalEvent);
@@ -413,6 +412,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             outputEvent = SerializeOneEvent(f, identifyEvent);
             Assert.Equal(LdValue.Null, outputEvent.Get("userKey"));
             Assert.Equal(expectedJsonValue, outputEvent.Get("user"));
+            Assert.False(outputEvent.Dictionary.ContainsKey("contextKind"));
 
             var customEvent = new CustomEvent { EventKey = "customkey", User = user };
             outputEvent = SerializeOneEvent(f, customEvent);
@@ -424,6 +424,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             outputEvent = SerializeOneEvent(f, indexEvent);
             Assert.Equal(LdValue.Null, outputEvent.Get("userKey"));
             Assert.Equal(expectedJsonValue, outputEvent.Get("user"));
+            Assert.False(outputEvent.Dictionary.ContainsKey("contextKind"));
         }
 
         private void TestPrivateAttribute(string privateAttrName, bool globallyPrivate)
