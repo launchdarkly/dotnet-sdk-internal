@@ -2,6 +2,10 @@
 
 All notable changes to `LaunchDarkly.InternalSdk` will be documented in this file. For full release notes for the projects that depend on this project, see their respective changelogs. This file describes changes only to the common code. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [2.3.1] - 2022-01-28
+### Fixed:
+- In analytics event data, `index` events were showing a `contextKind` property for anonymous users. That type of event should not have that property; LaunchDarkly would ignore it.
+
 ## [2.3.0] - 2021-10-27
 ### Added:
 - `HttpProperties.NewHttpMessageHandler()`
