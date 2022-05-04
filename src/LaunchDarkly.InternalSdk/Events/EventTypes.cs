@@ -32,26 +32,6 @@ namespace LaunchDarkly.Sdk.Internal.Events
     public static class EventTypes
     {
         /// <summary>
-        /// Used in <see cref="AliasEvent"/>.
-        /// </summary>
-        public enum ContextKind
-        {
-            User,
-            AnonymousUser
-        };
-
-        public static string ToIdentifier(this ContextKind value)
-        {
-            switch (value)
-            {
-                case ContextKind.AnonymousUser:
-                    return "anonymousUser";
-                default:
-                    return "user";
-            }
-        }
-
-        /// <summary>
         /// Parameters for <see cref="EventProcessor.RecordEvaluationEvent(EvaluationEvent)"/>.
         /// Note that the "kind" string identifying this type of event in JSON data is "feature",
         /// not "evaluation".
@@ -90,18 +70,6 @@ namespace LaunchDarkly.Sdk.Internal.Events
             public string EventKey { get; set; }
             public LdValue Data { get; set; }
             public double? MetricValue { get; set; }
-        }
-
-        /// <summary>
-        /// Parameters for <see cref="EventProcessor.RecordAliasEvent(UnixMillisecondTime, string, string)"/>.
-        /// </summary>
-        public struct AliasEvent
-        {
-            public UnixMillisecondTime Timestamp { get; set; }
-            public string Key { get; set; }
-            public string PreviousKey { get; set; }
-            public ContextKind ContextKind { get; set; }
-            public ContextKind PreviousContextKind { get; set; }
         }
     }
 }

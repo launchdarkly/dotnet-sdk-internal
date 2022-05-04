@@ -304,10 +304,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             }
 
             // Tell the user deduplicator, if any, about this user; this may produce an index event.
-            // We only need to do this if there is *not* already going to be a full-fidelity event
-            // containing an inline user.
-            if (!(willAddFullEvent && _config.InlineUsersInEvents) && user != null
-                && _userDeduplicator != null)
+            if (user != null && _userDeduplicator != null)
             {
                 bool needUserEvent = _userDeduplicator.ProcessUser(user);
                 if (needUserEvent && !(e is IdentifyEvent))

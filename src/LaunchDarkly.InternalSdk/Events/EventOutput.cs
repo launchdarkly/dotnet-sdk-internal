@@ -19,7 +19,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         public string SerializeOutputEvents(object[] events, EventSummary summary, out int eventCountOut)
         {
             var jsonWriter = JWriter.New();
-            var scope = new EventOutputFormatterScope(_config, jsonWriter, _config.InlineUsersInEvents);
+            var scope = new EventOutputFormatterScope(_config, jsonWriter);
             eventCountOut = scope.WriteOutputEvents(events, summary);
             return jsonWriter.GetString();
         }
@@ -40,7 +40,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 new MutableKeyValuePair<A, B> { Key = kv.Key, Value = kv.Value };
         }
 
-        public EventOutputFormatterScope(EventsConfiguration config, JWriter jw, bool inlineUsers)
+        public EventOutputFormatterScope(EventsConfiguration config, JWriter jw)
         {
             _config = config;
             _jsonWriter = jw;
@@ -87,12 +87,6 @@ namespace LaunchDarkly.Sdk.Internal.Events
                     {
                         _obj.Name("metricValue").Double(ce.MetricValue.Value);
                     }
-                    break;
-                case AliasEvent ae:
-                    WriteBase("alias", ae.Timestamp, ae.Key);
-                    _obj.Name("contextKind").String(ae.ContextKind.ToIdentifier());
-                    _obj.Name("previousKey").String(ae.PreviousKey);
-                    _obj.Name("previousContextKind").String(ae.PreviousContextKind.ToIdentifier());
                     break;
                 case EventProcessorInternal.IndexEvent ie:
                     WriteBase("index", ie.Timestamp, null);
@@ -199,7 +193,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
         private void WriteUserOrKey(User user, bool forceInline, bool includeContextKind)
         {
-            if (forceInline || _config.InlineUsersInEvents)
+            if (forceInline)
             {
                 WriteUser(user);
             }
@@ -210,7 +204,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             if (includeContextKind && user != null && user.Anonymous)
             {
                 // only "feature", "debug", and "custom" events should ever have contextKind
-                _obj.Name("contextKind").String(ContextKind.AnonymousUser.ToIdentifier());
+                _obj.Name("contextKind").String("anonymousUser");
             }
         }
 

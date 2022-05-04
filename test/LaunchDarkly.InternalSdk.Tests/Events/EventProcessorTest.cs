@@ -169,22 +169,6 @@ namespace LaunchDarkly.Sdk.Internal.Events
         }
 
         [Fact]
-        public void IdentifyEventCanHaveNullUser()
-        {
-            var mockSender = MakeMockSender();
-            var captured = EventCapture.From(mockSender);
-
-            using (var ep = MakeProcessor(_config, mockSender))
-            {
-                RecordIdentify(ep, _fixedTimestamp, null);
-                FlushAndWait(ep);
-
-                Assert.Collection(captured.Events,
-                    item => CheckIdentifyEvent(item, _fixedTimestamp, LdValue.Null));
-            }
-        }
-
-        [Fact]
         public void IndividualFeatureEventIsQueuedWithIndexEvent()
         {
             var mockSender = MakeMockSender();
@@ -197,7 +181,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
                 Assert.Collection(captured.Events,
                     item => CheckIndexEvent(item, BasicEval.Timestamp, _userJson),
-                    item => CheckFeatureEvent(item, BasicFlagWithTracking, BasicEval, LdValue.Null),
+                    item => CheckFeatureEvent(item, BasicFlagWithTracking, BasicEval),
                     item => CheckSummaryEvent(item));
             }
         }
@@ -217,26 +201,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
                 Assert.Collection(captured.Events,
                     item => CheckIndexEvent(item, BasicEval.Timestamp, _scrubbedUserJson),
-                    item => CheckFeatureEvent(item, BasicFlagWithTracking, BasicEval, LdValue.Null),
-                    item => CheckSummaryEvent(item));
-            }
-        }
-
-        [Fact]
-        public void FeatureEventCanContainInlineUser()
-        {
-            _config.InlineUsersInEvents = true;
-
-            var mockSender = MakeMockSender();
-            var captured = EventCapture.From(mockSender);
-
-            using (var ep = MakeProcessor(_config, mockSender))
-            {
-                RecordEval(ep, BasicFlagWithTracking, BasicEval);
-                FlushAndWait(ep);
-
-                Assert.Collection(captured.Events,
-                    item => CheckFeatureEvent(item, BasicFlagWithTracking, BasicEval, _userJson),
+                    item => CheckFeatureEvent(item, BasicFlagWithTracking, BasicEval),
                     item => CheckSummaryEvent(item));
             }
         }
@@ -244,8 +209,6 @@ namespace LaunchDarkly.Sdk.Internal.Events
         [Fact]
         public void FeatureEventCanHaveReason()
         {
-            _config.InlineUsersInEvents = true;
-
             var mockSender = MakeMockSender();
             var captured = EventCapture.From(mockSender);
 
@@ -260,77 +223,23 @@ namespace LaunchDarkly.Sdk.Internal.Events
                     EvaluationReason.PrerequisiteFailedReason("key"),
                     EvaluationReason.ErrorReason(EvaluationErrorKind.WrongType)
                 };
+                var userCounter = 0;
                 foreach (var reason in reasons)
                 {
                     captured.Events.Clear();
 
+                    var user = User.WithKey("user" + (++userCounter));
                     var eval = BasicEval;
+                    eval.User = user;
                     eval.Reason = reason;
                     RecordEval(ep, BasicFlagWithTracking, eval);
                     FlushAndWait(ep);
 
                     Assert.Collection(captured.Events,
-                        item => CheckFeatureEvent(item, BasicFlagWithTracking, eval, _userJson),
+                        item => CheckIndexEvent(item),
+                        item => CheckFeatureEvent(item, BasicFlagWithTracking, eval),
                         item => CheckSummaryEvent(item));
                 }
-            }
-        }
-
-        [Fact]
-        public void UserDetailsAreScrubbedInFeatureEvent()
-        {
-            _config.AllAttributesPrivate = true;
-            _config.InlineUsersInEvents = true;
-
-            var mockSender = MakeMockSender();
-            var captured = EventCapture.From(mockSender);
-
-            using (var ep = MakeProcessor(_config, mockSender))
-            {
-                RecordEval(ep, BasicFlagWithTracking, BasicEval);
-                FlushAndWait(ep);
-
-                Assert.Collection(captured.Events,
-                    item => CheckFeatureEvent(item, BasicFlagWithTracking, BasicEval, _scrubbedUserJson),
-                    item => CheckSummaryEvent(item));
-            }
-        }
-
-        [Fact]
-        public void FeatureEventCanHaveNullUser()
-        {
-            var mockSender = MakeMockSender();
-            var captured = EventCapture.From(mockSender);
-
-            using (var ep = MakeProcessor(_config, mockSender))
-            {
-                var eval = BasicEval;
-                eval.User = null;
-                RecordEval(ep, BasicFlagWithTracking, eval);
-                FlushAndWait(ep);
-
-                Assert.Collection(captured.Events,
-                    item => CheckFeatureEvent(item, BasicFlagWithTracking, eval, LdValue.Null),
-                    item => CheckSummaryEvent(item));
-            }
-        }
-
-        [Fact]
-        public void IndexEventIsStillGeneratedIfInlineUsersIsTrueButFeatureEventIsNotTracked()
-        {
-            _config.InlineUsersInEvents = true;
-
-            var mockSender = MakeMockSender();
-            var captured = EventCapture.From(mockSender);
-
-            using (var ep = MakeProcessor(_config, mockSender))
-            {
-                RecordEval(ep, BasicFlag, BasicEval);
-                FlushAndWait(ep);
-
-                Assert.Collection(captured.Events,
-                    item => CheckIndexEvent(item, BasicEval.Timestamp, _userJson),
-                    item => CheckSummaryEvent(item));
             }
         }
 
@@ -369,7 +278,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
                 Assert.Collection(captured.Events,
                     item => CheckIndexEvent(item, BasicEval.Timestamp, _userJson),
-                    item => CheckFeatureEvent(item, flag, BasicEval, LdValue.Null),
+                    item => CheckFeatureEvent(item, flag, BasicEval),
                     item => CheckDebugEvent(item, flag, BasicEval, _userJson),
                     item => CheckSummaryEvent(item));
             }
@@ -455,8 +364,8 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
                 Assert.Collection(captured.Events,
                     item => CheckIndexEvent(item, BasicEval.Timestamp, _userJson),
-                    item => CheckFeatureEvent(item, flag1, BasicEval, LdValue.Null),
-                    item => CheckFeatureEvent(item, flag2, BasicEval, LdValue.Null),
+                    item => CheckFeatureEvent(item, flag1, BasicEval),
+                    item => CheckFeatureEvent(item, flag2, BasicEval),
                     item => CheckSummaryEvent(item));
             }
         }
@@ -551,92 +460,10 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
                 Assert.Collection(captured.Events,
                     item => CheckIndexEvent(item, ce.Timestamp, _userJson),
-                    item => CheckCustomEvent(item, ce, LdValue.Null));
+                    item => CheckCustomEvent(item, ce));
             }
         }
         
-        [Fact]
-        public void CustomEventCanContainInlineUser()
-        {
-            _config.InlineUsersInEvents = true;
-
-            var mockSender = MakeMockSender();
-            var captured = EventCapture.From(mockSender);
-
-            using (var ep = MakeProcessor(_config, mockSender))
-            {
-                RecordCustom(ep, BasicCustom);
-                ep.Flush();
-                ep.WaitUntilInactive();
-
-                Assert.Collection(captured.Events,
-                    item => CheckCustomEvent(item, BasicCustom, _userJson));
-            }
-        }
-
-        [Fact]
-        public void UserDetailsAreScrubbedInCustomEvent()
-        {
-            _config.AllAttributesPrivate = true;
-            _config.InlineUsersInEvents = true;
-
-            var mockSender = MakeMockSender();
-            var captured = EventCapture.From(mockSender);
-
-            using (var ep = MakeProcessor(_config, mockSender))
-            {
-                RecordCustom(ep, BasicCustom);
-                ep.Flush();
-                ep.WaitUntilInactive();
-
-                Assert.Collection(captured.Events,
-                    item => CheckCustomEvent(item, BasicCustom, _scrubbedUserJson));
-            }
-        }
-
-        [Fact]
-        public void CustomEventCanHaveNullUser()
-        {
-            var mockSender = MakeMockSender();
-            var captured = EventCapture.From(mockSender);
-
-            using (var ep = MakeProcessor(_config, mockSender))
-            {
-                var ce = BasicCustom;
-                ce.User = null;
-                RecordCustom(ep, ce);
-                ep.Flush();
-                ep.WaitUntilInactive();
-
-                Assert.Collection(captured.Events,
-                    item => CheckCustomEvent(item, ce, LdValue.Null));
-            }
-        }
-
-        [Fact]
-        public void AliasEventIsQueued()
-        {
-            var mockSender = MakeMockSender();
-            var captured = EventCapture.From(mockSender);
-
-            using (var ep = MakeProcessor(_config, mockSender))
-            {
-                var ae = new AliasEvent
-                {
-                    Timestamp = _fixedTimestamp,
-                    Key = "newkey",
-                    PreviousKey = "oldkey",
-                    ContextKind = ContextKind.User,
-                    PreviousContextKind = ContextKind.AnonymousUser
-                };
-                ep.RecordAliasEvent(ae);
-                FlushAndWait(ep);
-
-                Assert.Collection(captured.Events,
-                    item => CheckAliasEvent(item, ae));
-            }
-        }
-
         [Fact]
         public void FinalFlushIsDoneOnDispose()
         {
@@ -714,7 +541,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
                 Assert.Collection(captured.Events,
                     item => CheckIdentifyEvent(item, _fixedTimestamp, _userJson),
-                    item => CheckCustomEvent(item, BasicCustom, LdValue.Null));
+                    item => CheckCustomEvent(item, BasicCustom));
             }
         }
 
@@ -861,6 +688,11 @@ namespace LaunchDarkly.Sdk.Internal.Events
             Assert.Equal(userJson, t.Get("user"));
         }
 
+        private void CheckIndexEvent(LdValue t)
+        {
+            Assert.Equal(LdValue.Of("index"), t.Get("kind"));
+        }
+
         private void CheckIndexEvent(LdValue t, UnixMillisecondTime timestamp, LdValue userJson)
         {
             Assert.Equal(LdValue.Of("index"), t.Get("kind"));
@@ -868,10 +700,9 @@ namespace LaunchDarkly.Sdk.Internal.Events
             Assert.Equal(userJson, t.Get("user"));
         }
 
-        private void CheckFeatureEvent(LdValue t, TestFlagProperties f, TestEvalProperties e,
-            LdValue userJson)
+        private void CheckFeatureEvent(LdValue t, TestFlagProperties f, TestEvalProperties e)
         {
-            CheckFeatureOrDebugEvent("feature", t, f, e, userJson);
+            CheckFeatureOrDebugEvent("feature", t, f, e, LdValue.Null);
         }
 
         private void CheckDebugEvent(LdValue t, TestFlagProperties f, TestEvalProperties e,
@@ -895,22 +726,13 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 t.Get("reason"));
         }
 
-        private void CheckCustomEvent(LdValue t, TestCustomEventProperties e, LdValue userJson)
+        private void CheckCustomEvent(LdValue t, TestCustomEventProperties e)
         {
             Assert.Equal(LdValue.Of("custom"), t.Get("kind"));
             Assert.Equal(LdValue.Of(e.Key), t.Get("key"));
             Assert.Equal(e.Data, t.Get("data"));
-            CheckEventUserOrKey(t, e.User, userJson);
+            CheckEventUserOrKey(t, e.User, LdValue.Null);
             Assert.Equal(e.MetricValue.HasValue ? LdValue.Of(e.MetricValue.Value) : LdValue.Null, t.Get("metricValue"));
-        }
-
-        private void CheckAliasEvent(LdValue t, AliasEvent ae)
-        {
-            Assert.Equal(LdValue.Of("alias"), t.Get("kind"));
-            Assert.Equal(LdValue.Of(ae.Key), t.Get("key"));
-            Assert.Equal(LdValue.Of(ae.PreviousKey), t.Get("previousKey"));
-            Assert.Equal(LdValue.Of(ae.ContextKind.ToIdentifier()), t.Get("contextKind"));
-            Assert.Equal(LdValue.Of(ae.PreviousContextKind.ToIdentifier()), t.Get("previousContextKind"));
         }
 
         private void CheckEventUserOrKey(LdValue o, User user, LdValue userJson)

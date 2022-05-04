@@ -122,9 +122,6 @@ namespace LaunchDarkly.Sdk.Internal.Events
         public void RecordCustomEvent(CustomEvent e) =>
             SubmitMessage(new EventProcessorInternal.EventMessage(e));
 
-        public void RecordAliasEvent(AliasEvent e) =>
-            SubmitMessage(new EventProcessorInternal.EventMessage(e));
-
         public void SetOffline(bool offline)
         {
             _offline.GetAndSet(offline);
