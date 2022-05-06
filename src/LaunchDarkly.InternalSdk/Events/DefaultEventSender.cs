@@ -21,7 +21,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         public static readonly TimeSpan DefaultRetryInterval = TimeSpan.FromSeconds(1);
 
         private const int MaxAttempts = 2;
-        private const string CurrentSchemaVersion = "3";
+        private const string CurrentSchemaVersion = "4";
 
         private readonly HttpClient _httpClient;
         private readonly HttpProperties _httpProperties;
