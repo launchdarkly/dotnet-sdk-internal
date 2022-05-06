@@ -114,15 +114,12 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 }
             }
 
-            internal void AddToSummary(EvaluationEvent ee)
-            {
-                _summarizer.SummarizeEvent(ee.Timestamp, ee.FlagKey, ee.FlagVersion, ee.Variation, ee.Value, ee.Default);
-            }
+            internal void AddToSummary(EvaluationEvent ee) =>
+                _summarizer.SummarizeEvent(ee.Timestamp, ee.FlagKey, ee.FlagVersion, ee.Variation, ee.Value, ee.Default,
+                    ee.Context);
 
-            internal FlushPayload GetPayload()
-            {
-                return new FlushPayload { Events = _events.ToArray(), Summary = _summarizer.Snapshot() };
-            }
+            internal FlushPayload GetPayload() =>
+                new FlushPayload { Events = _events.ToArray(), Summary = _summarizer.Snapshot() };
 
             internal void Clear()
             {

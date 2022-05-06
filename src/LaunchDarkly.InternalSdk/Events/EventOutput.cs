@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-using System.Linq;
 using LaunchDarkly.JsonStream;
 
 using static LaunchDarkly.Sdk.Internal.Events.EventTypes;
@@ -127,50 +126,52 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
             var flagsObj = obj.Name("features").Object();
 
-            var unprocessedCounters = summary.Counters.Select(kv => MutableKeyValuePair<EventsCounterKey, EventsCounterValue>.FromKeyValue(kv)).ToArray();
-            for (var i = 0; i < unprocessedCounters.Length; i++)
+            foreach (var kvFlag in summary.Flags)
             {
-                var firstEntry = unprocessedCounters[i];
-                if (firstEntry.Value is null)
-                { // already processed
-                    continue;
-                }
-                var flagKey = firstEntry.Key.Key;
-                var flagDefault = firstEntry.Value.Default;
+                var flagObj = flagsObj.Name(kvFlag.Key).Object();
 
-                var flagObj = flagsObj.Name(flagKey).Object();
-                LdValueConverter.WriteJsonValue(flagDefault, flagObj.Name("default"));
+                var flagSummary = kvFlag.Value;
+
+                LdValueConverter.WriteJsonValue(flagSummary.Default, flagObj.Name("default"));
+
+                var contextKindsArr = flagObj.Name("contextKinds").Array();
+                foreach (var kind in flagSummary.ContextKinds)
+                {
+                    contextKindsArr.String(kind);
+                }
+                contextKindsArr.End();
+
                 var countersArr = flagObj.Name("counters").Array();
 
-                for (var j = i; j < unprocessedCounters.Length; j++)
+                foreach (var counter in flagSummary.Counters)
                 {
-                    var entry = unprocessedCounters[j];
-                    var key = entry.Key;
-                    if (key.Key == flagKey && entry.Value != null)
-                    {
-                        var counter = entry.Value;
-                        unprocessedCounters[j].Value = null; // mark as already processed
+                    var counterObj = countersArr.Object();
 
-                        var counterObj = countersArr.Object();
-                        if (key.Variation.HasValue)
-                        {
-                            counterObj.Name("variation").Int(key.Variation.Value);
-                        }
-                        LdValueConverter.WriteJsonValue(counter.FlagValue, counterObj.Name("value"));
-                        if (key.Version.HasValue)
-                        {
-                            counterObj.Name("version").Int(key.Version.Value);
-                        }
-                        else
-                        {
-                            counterObj.Name("unknown").Bool(true);
-                        }
-                        counterObj.Name("count").Int(counter.Count);
-                        counterObj.End();
+                    if (counter.Key.Variation.HasValue)
+                    {
+                        counterObj.Name("variation").Int(counter.Key.Variation.Value);
                     }
+
+                    if (counter.Key.Variation.HasValue)
+                    {
+                        counterObj.Name("variation").Int(counter.Key.Variation.Value);
+                    }
+                    LdValueConverter.WriteJsonValue(counter.Value.FlagValue, counterObj.Name("value"));
+                    if (counter.Key.Version.HasValue)
+                    {
+                        counterObj.Name("version").Int(counter.Key.Version.Value);
+                    }
+                    else
+                    {
+                        counterObj.Name("unknown").Bool(true);
+                    }
+                    counterObj.Name("count").Int(counter.Value.Count);
+
+                    counterObj.End();
                 }
 
                 countersArr.End();
+
                 flagObj.End();
             }
 

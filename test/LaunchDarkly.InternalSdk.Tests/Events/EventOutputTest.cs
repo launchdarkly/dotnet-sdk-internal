@@ -186,20 +186,23 @@ namespace LaunchDarkly.Sdk.Internal.Events
         [Fact]
         public void SummaryEventIsSerialized()
         {
+            var context1 = Context.NewWithKind("kind1", "key1");
+            var context2 = Context.NewWithKind("kind2", "key2");
+
             var summary = new EventSummary();
             summary.NoteTimestamp(UnixMillisecondTime.OfMillis(1001));
 
-            summary.IncrementCounter("first", 1, 11, LdValue.Of("value1a"), LdValue.Of("default1"));
+            summary.IncrementCounter("first", 1, 11, LdValue.Of("value1a"), LdValue.Of("default1"), context1);
 
-            summary.IncrementCounter("second", 1, 21, LdValue.Of("value2a"), LdValue.Of("default2"));
+            summary.IncrementCounter("second", 1, 21, LdValue.Of("value2a"), LdValue.Of("default2"), context1);
 
-            summary.IncrementCounter("first", 1, 11, LdValue.Of("value1a"), LdValue.Of("default1"));
-            summary.IncrementCounter("first", 1, 12, LdValue.Of("value1a"), LdValue.Of("default1"));
+            summary.IncrementCounter("first", 1, 11, LdValue.Of("value1a"), LdValue.Of("default1"), context1);
+            summary.IncrementCounter("first", 1, 12, LdValue.Of("value1a"), LdValue.Of("default1"), context1);
 
-            summary.IncrementCounter("second", 2, 21, LdValue.Of("value2b"), LdValue.Of("default2"));
-            summary.IncrementCounter("second", null, 21, LdValue.Of("default2"), LdValue.Of("default2")); // flag exists (has version), but eval failed (no variation)
+            summary.IncrementCounter("second", 2, 21, LdValue.Of("value2b"), LdValue.Of("default2"), context2);
+            summary.IncrementCounter("second", null, 21, LdValue.Of("default2"), LdValue.Of("default2"), context2); // flag exists (has version), but eval failed (no variation)
 
-            summary.IncrementCounter("third", null, null, LdValue.Of("default3"), LdValue.Of("default3")); // flag doesn't exist (no version)
+            summary.IncrementCounter("third", null, null, LdValue.Of("default3"), LdValue.Of("default3"), context2); // flag doesn't exist (no version)
 
             summary.NoteTimestamp(UnixMillisecondTime.OfMillis(1000));
             summary.NoteTimestamp(UnixMillisecondTime.OfMillis(1002));
@@ -217,19 +220,23 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
             var firstJson = featuresJson.Get("first");
             Assert.Equal("default1", firstJson.Get("default").AsString);
-            TestUtil.AssertContainsInAnyOrder(firstJson.Get("counters").AsList(LdValue.Convert.Json),
+            Assert.Equal(LdValue.ArrayOf(LdValue.Of("kind1")), firstJson.Get("contextKinds")); // we evaluated this flag with only context1
+            TestUtil.AssertContainsInAnyOrder(firstJson.Get("counters").List,
                 LdValue.Parse(@"{""value"":""value1a"",""variation"":1,""version"":11,""count"":2}"),
                 LdValue.Parse(@"{""value"":""value1a"",""variation"":1,""version"":12,""count"":1}"));
 
             var secondJson = featuresJson.Get("second");
             Assert.Equal("default2", secondJson.Get("default").AsString);
-            TestUtil.AssertContainsInAnyOrder(secondJson.Get("counters").AsList(LdValue.Convert.Json),
+            TestUtil.AssertContainsInAnyOrder(secondJson.Get("contextKinds").List,
+                LdValue.Of("kind1"), LdValue.Of("kind2")); // we evaluated this flag with both context1 and context2
+            TestUtil.AssertContainsInAnyOrder(secondJson.Get("counters").List,
                 LdValue.Parse(@"{""value"":""value2a"",""variation"":1,""version"":21,""count"":1}"),
                 LdValue.Parse(@"{""value"":""value2b"",""variation"":2,""version"":21,""count"":1}"),
                 LdValue.Parse(@"{""value"":""default2"",""version"":21,""count"":1}"));
 
             var thirdJson = featuresJson.Get("third");
             Assert.Equal("default3", thirdJson.Get("default").AsString);
+            Assert.Equal(LdValue.ArrayOf(LdValue.Of("kind2")), thirdJson.Get("contextKinds")); // we evaluated this flag with only context2
             TestUtil.AssertContainsInAnyOrder(thirdJson.Get("counters").AsList(LdValue.Convert.Json),
                 LdValue.Parse(@"{""unknown"":true,""value"":""default3"",""count"":1}"));
         }

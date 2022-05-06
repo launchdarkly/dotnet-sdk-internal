@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace LaunchDarkly.Sdk.Internal.Events
 {
@@ -19,10 +18,11 @@ namespace LaunchDarkly.Sdk.Internal.Events
             int? flagVersion,
             int? variation,
             in LdValue value,
-            in LdValue defaultValue
+            in LdValue defaultValue,
+            in Context context
             )
         {
-            _eventsState.IncrementCounter(flagKey, variation, flagVersion, value, defaultValue);
+            _eventsState.IncrementCounter(flagKey, variation, flagVersion, value, defaultValue, context);
             _eventsState.NoteTimestamp(timestamp);
         }
 
@@ -42,28 +42,43 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
     internal sealed class EventSummary
     {
-        public Dictionary<EventsCounterKey, EventsCounterValue> Counters { get; } =
-            new Dictionary<EventsCounterKey, EventsCounterValue>();
+        public readonly Dictionary<string, FlagSummary> Flags =
+            new Dictionary<string, FlagSummary>();
+
         public UnixMillisecondTime StartDate { get; private set; }
         public UnixMillisecondTime EndDate { get; private set; }
-        public bool Empty
-        {
-            get  
-            {
-                return Counters.Count == 0;
-            }
-        }
 
-        public void IncrementCounter(string key, int? variation, int? version, in LdValue flagValue, in LdValue defaultVal)
+        public bool Empty => Flags.Count == 0;
+
+        public void IncrementCounter(string key, int? variation, int? version, LdValue flagValue, LdValue defaultVal, in Context context)
         {
-            EventsCounterKey counterKey = new EventsCounterKey(key, version, variation);
-            if (Counters.TryGetValue(counterKey, out EventsCounterValue value))
+            if (!Flags.TryGetValue(key, out var flagSummary))
+            {
+                flagSummary = new FlagSummary(key, defaultVal);
+                Flags[key] = flagSummary;
+            }
+
+            var contextKinds = flagSummary.ContextKinds;
+            if (context.Multiple)
+            {
+                foreach (var mc in context.MultiKindContexts)
+                {
+                    contextKinds.Add(mc.Kind);
+                }
+            }
+            else
+            {
+                contextKinds.Add(context.Kind);
+            }
+
+            EventsCounterKey counterKey = new EventsCounterKey(version, variation);
+            if (flagSummary.Counters.TryGetValue(counterKey, out EventsCounterValue value))
             {
                 value.Increment();
             }
             else
             {
-                Counters[counterKey] = new EventsCounterValue(1, flagValue, defaultVal);
+                flagSummary.Counters[counterKey] = new EventsCounterValue(1, flagValue);
             }
         }
 
@@ -80,15 +95,28 @@ namespace LaunchDarkly.Sdk.Internal.Events
         }
     }
 
-    internal sealed class EventsCounterKey
+    internal sealed class FlagSummary
     {
         public readonly string Key;
+        public readonly LdValue Default;
+        public readonly HashSet<string> ContextKinds = new HashSet<string>();
+        public readonly Dictionary<EventsCounterKey, EventsCounterValue> Counters =
+            new Dictionary<EventsCounterKey, EventsCounterValue>();
+
+        public FlagSummary(string key, LdValue defaultVal)
+        {
+            Key = key;
+            Default = defaultVal;
+        }
+    }
+
+    internal sealed class EventsCounterKey
+    {
         public readonly int? Version;
         public readonly int? Variation;
 
-        public EventsCounterKey(string key, int? version, int? variation)
+        public EventsCounterKey(int? version, int? variation)
         {
-            Key = key;
             Version = version;
             Variation = variation;
         }
@@ -98,29 +126,25 @@ namespace LaunchDarkly.Sdk.Internal.Events
         {
             if (obj is EventsCounterKey o)
             {
-                return Key == o.Key && Variation == o.Variation && Version == o.Version;
+                return Variation == o.Variation && Version == o.Version;
             }
             return false;
         }
 
         // Required because we use this class as a dictionary key
-        public override int GetHashCode()
-        {
-            return HashCodeBuilder.New().With(Key).With(Variation).With(Version).Value;
-        }
+        public override int GetHashCode() =>
+            (Variation ?? -1) * 17 + (Version ?? -1);
     }
 
     internal sealed class EventsCounterValue
     {
         public int Count;
         public readonly LdValue FlagValue;
-        public readonly LdValue Default;
 
-        public EventsCounterValue(int count, in LdValue flagValue, in LdValue defaultVal)
+        public EventsCounterValue(int count, in LdValue flagValue)
         {
             Count = count;
             FlagValue = flagValue;
-            Default = defaultVal;
         }
 
         public void Increment()
@@ -133,7 +157,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         {
             if (obj is EventsCounterValue o)
             {
-                return Count == o.Count && Object.Equals(FlagValue, o.FlagValue) && Object.Equals(Default, o.Default);
+                return Count == o.Count && object.Equals(FlagValue, o.FlagValue);
             }
             return false;
         }
@@ -141,13 +165,13 @@ namespace LaunchDarkly.Sdk.Internal.Events
         // Used only in tests
         public override int GetHashCode()
         {
-            return HashCodeBuilder.New().With(Count).With(FlagValue).With(Default).Value;
+            return HashCodeBuilder.New().With(Count).With(FlagValue).Value;
         }
 
         // Used only in tests
         public override string ToString()
         {
-            return "{" + Count + ", " + FlagValue + ", " + Default + "}";
+            return "{" + Count + ", " + FlagValue + "}";
         }
     }
 }
