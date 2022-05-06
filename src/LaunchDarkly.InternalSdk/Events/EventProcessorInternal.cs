@@ -303,7 +303,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             // containing an inline user.
             if (context.Defined && _contextDeduplicator != null)
             {
-                bool needUserEvent = _contextDeduplicator.ProcessContext(ref context);
+                bool needUserEvent = _contextDeduplicator.ProcessContext(context);
                 if (needUserEvent && !(e is IdentifyEvent))
                 {
                     IndexEvent ie = new IndexEvent { Timestamp = timestamp, Context = context };

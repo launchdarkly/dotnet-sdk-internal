@@ -10,6 +10,7 @@ using Xunit;
 
 using static LaunchDarkly.Sdk.Internal.Events.EventTypes;
 using static LaunchDarkly.Sdk.TestUtil;
+using static LaunchDarkly.TestHelpers.JsonAssertions;
 
 namespace LaunchDarkly.Sdk.Internal.Events
 {
@@ -637,7 +638,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         }
 
         private void CheckIdentifyEvent(LdValue t, UnixMillisecondTime timestamp, LdValue contextJson) =>
-            AssertJsonEquals(
+            AssertJsonEqual(
                 LdValue.BuildObject().Set("kind", "identify").
                     Set("creationDate", timestamp.Value).
                     Set("context", contextJson).Build().ToJsonString(),
@@ -649,7 +650,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         }
 
         private void CheckIndexEvent(LdValue t, UnixMillisecondTime timestamp, LdValue contextJson) =>
-            AssertJsonEquals(
+            AssertJsonEqual(
                 LdValue.BuildObject().Set("kind", "index").
                     Set("creationDate", timestamp.Value).
                     Set("context", contextJson).Build().ToJsonString(),
@@ -837,7 +838,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         {
         }
 
-        public bool ProcessContext(ref Context context)
+        public bool ProcessContext(in Context context)
         {
             if (!_contextKeys.Contains(context.FullyQualifiedKey))
             {

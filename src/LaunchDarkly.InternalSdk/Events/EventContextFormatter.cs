@@ -50,9 +50,15 @@ namespace LaunchDarkly.Sdk.Internal.Events
             }
 
             List<string> redactedList = null;
+            var privateRefs = _globalPrivateAttributes.Concat(c.PrivateAttributes);
             foreach (var attr in c.OptionalAttributeNames)
             {
-                WriteOrRedact(attr, in c, obj, ref redactedList);
+                if (_allAttributesPrivate)
+                {
+                    AddRedacted(ref redactedList, attr); // the entire attribute is redacted
+                    continue;
+                }
+                WriteOrRedact(attr, c, ref obj, privateRefs, ref redactedList);
             }
 
             if (!(c.Secondary is null) || (!(redactedList is null)))
@@ -77,11 +83,84 @@ namespace LaunchDarkly.Sdk.Internal.Events
             obj.End();
         }
 
-        // This is a placeholder where the context-aware attribute redaction logic will go.
-        // Currently it does not redact anything.
-        private void WriteOrRedact(string attrName, in Context c, ObjectWriter obj, ref List<string> redactedList)
+        // This method implements the context-aware attribute redaction logic, in which an attribute
+        // can be either written as-is, fully redacted, or (for a JSON object) partially redacted.
+        // In the latter two cases, this method returns the redacted attribute reference string;
+        // otherwise it returns null.
+        private void WriteOrRedact(
+            string attrName,
+            in Context c,
+            ref ObjectWriter obj,
+            IEnumerable<AttributeRef> privateRefs,
+            ref List<string> redactedList
+            )
         {
-            LdValueConverter.WriteJsonValue(c.GetValue(attrName), obj.Name(attrName));
+            // First check if the whole attribute is redacted by name.
+            foreach (var a in privateRefs)
+            {
+                if (a.Depth == 1 && a.TryGetComponent(0, out var firstPathComponent) &&
+                    firstPathComponent.Name == attrName)
+                {
+                    AddRedacted(ref redactedList, attrName); // the entire attribute is redacted
+                    return;
+                }
+            }
+
+            var value = c.GetValue(attrName);
+            if (value.Type != LdValueType.Object)
+            {
+                LdValueConverter.WriteJsonValue(value, obj.Name(attrName));
+                return;
+            }
+
+            // The value is a JSON object, and the attribute may need to be partially redacted.
+            WriteRedactedValue(value, ref obj, privateRefs, 0, attrName, ref redactedList);
+        }
+
+        private void WriteRedactedValue(
+            in LdValue value,
+            ref ObjectWriter obj,
+            IEnumerable<AttributeRef> allPrivate,
+            int depth,
+            string pathComponent,
+            ref List<string> redactedList)
+        {
+            IEnumerable<AttributeRef> filteredPrivate = allPrivate.Where(a =>
+                a.TryGetComponent(depth, out var p) && p.Name == pathComponent);
+
+            var haveSubpaths = false;
+            foreach (var a in filteredPrivate)
+            {
+                if (a.Depth <= depth + 1)
+                {
+                    // exact match for this subpath or a parent - the whole value is redacted
+                    AddRedacted(ref redactedList, a.ToString());
+                    return;
+                }
+                haveSubpaths = true;
+            }
+
+            if (!haveSubpaths || value.Type != LdValueType.Object)
+            {
+                LdValueConverter.WriteJsonValue(value, obj.Name(pathComponent));
+                return;
+            }
+
+            var subObj = obj.Name(pathComponent).Object();
+            foreach (var kv in value.Dictionary)
+            {
+                WriteRedactedValue(kv.Value, ref subObj, filteredPrivate, depth + 1, kv.Key, ref redactedList);
+            }
+            subObj.End();
+        }
+
+        private void AddRedacted(ref List<string> redactedList, string attrName)
+        {
+            if (redactedList is null)
+            {
+                redactedList = new List<string>();
+            }
+            redactedList.Add(attrName);
         }
     }
 }

@@ -245,16 +245,9 @@ namespace LaunchDarkly.Sdk.Internal.Events
         {
             var emptySummary = new EventSummary();
             var json = f.SerializeOutputEvents(new object[] { e }, emptySummary, out var count);
-            try
-            {
-                var outputEvent = LdValue.Parse(json).Get(0);
-                Assert.Equal(1, count);
-                return outputEvent;
-            }
-            catch (Exception ex)
-            {
-                throw new Exception(string.Format("received invalid JSON ({0}): {1}", ex.Message, json));
-            }
+            var outputEvent = TestUtil.TryParseJson(json).Get(0);
+            Assert.Equal(1, count);
+            return outputEvent;
         }
 
         private void TestEventSerialization(object e, LdValue expectedJsonValue)

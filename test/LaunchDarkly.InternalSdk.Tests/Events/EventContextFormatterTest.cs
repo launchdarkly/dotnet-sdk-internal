@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using LaunchDarkly.JsonStream;
 using Xunit;
@@ -58,6 +59,68 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 context = Context.Builder("my-key").Kind("org").Secondary("x").Build(),
                 json = @"{""kind"": ""org"", ""key"": ""my-key"", ""_meta"": {""secondary"": ""x""}}"
             },
+            new Params
+            {
+                name = "all attributes private globally",
+                context = Context.Builder("my-key").Kind("org").
+                    Name("my-name").
+                    Set("attr1", "value1").
+                    Build(),
+                config = new EventsConfiguration { AllAttributesPrivate = true },
+                json = @"{
+                    ""kind"": ""org"",
+                    ""key"": ""my-key"",
+                    ""_meta"": {
+                        ""redactedAttributes"": [""attr1"", ""name""]
+                    }
+		        }"
+            },
+            new Params
+            {
+                name = "some top-level attributes private",
+                context = Context.Builder("my-key").Kind("org").
+                    Name("my-name").
+                    Set("attr1", "value1").
+                    Set("attr2", "value2").
+                    Private("attr2").
+                    Build(),
+                config = new EventsConfiguration {
+                    PrivateAttributes = ImmutableHashSet.Create(
+                        AttributeRef.FromLiteral("name")
+                        )
+                },
+                json = @"{
+                    ""kind"": ""org"",
+                    ""key"": ""my-key"",
+                    ""attr1"": ""value1"",
+                    ""_meta"": {
+                        ""redactedAttributes"": [""attr2"", ""name""]
+                    }
+		        }"
+            },
+            new Params
+            {
+                name = "partially redacting object attributes",
+                context = Context.Builder("my-key").
+                    Set("address", LdValue.Parse(@"{""street"": ""17 Highbrow St."", ""city"": ""London""}")).
+                    Set("complex", LdValue.Parse(@"{""a"": {""b"": {""c"": 1, ""d"": 2}, ""e"": 3}, ""f"": 4, ""g"": 5}")).
+                    Private("/complex/a/b/d", "/complex/a/b/nonexistent-prop", "/complex/f", "/complex/g/g-is-not-an-object").
+                    Build(),
+                config = new EventsConfiguration {
+                    PrivateAttributes = ImmutableHashSet.Create(
+                        AttributeRef.FromPath("/address/street")
+                        )
+                },
+                json = @"{
+                    ""kind"": ""user"",
+                    ""key"": ""my-key"",
+                    ""address"": {""city"": ""London""},
+                    ""complex"": {""a"": {""b"": {""c"": 1}, ""e"": 3}, ""g"": 5},
+                    ""_meta"": {
+                        ""redactedAttributes"": [""/address/street"", ""/complex/a/b/d"", ""/complex/f""]
+                    }
+		        }"
+            },
         };
 
         public static IEnumerable<object[]> TestCaseNames => TestCases.Select(p => new object[] { p.name });
@@ -72,7 +135,30 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
             var w = JWriter.New();
             new EventContextFormatter(p.config ?? new EventsConfiguration()).Write(p.context, w);
-            AssertJsonEqual(p.json, w.GetString());
+            var json = w.GetString();
+
+            LdValue parsedJson = TestUtil.TryParseJson(json);
+            AssertJsonEqual(p.json, ValueWithRedactedAttributesSorted(parsedJson).ToJsonString());
+        }
+
+        private static string JsonWithRedactedAttributesSorted(string input) =>
+            ValueWithRedactedAttributesSorted(LdValue.Parse(input)).ToJsonString();
+
+        private static LdValue ValueWithRedactedAttributesSorted(LdValue value)
+        {
+            switch (value.Type)
+            {
+                case LdValueType.Array:
+                    return LdValue.ArrayFrom(value.List.Select(ValueWithRedactedAttributesSorted));
+                case LdValueType.Object:
+                    return LdValue.ObjectFrom(value.Dictionary.ToDictionary(
+                        kv => kv.Key,
+                        kv => kv.Key == "redactedAttributes" ?
+                            LdValue.Convert.String.ArrayFrom(kv.Value.AsList(LdValue.Convert.String).OrderBy(s => s))
+                            : ValueWithRedactedAttributesSorted(kv.Value)));
+                default:
+                    return value;
+            }
         }
     }
 }

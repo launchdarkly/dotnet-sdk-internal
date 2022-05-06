@@ -20,7 +20,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         /// </summary>
         /// <param name="context">a context object</param>
         /// <returns>true if an index event should be emitted</returns>
-        bool ProcessContext(ref Context context);
+        bool ProcessContext(in Context context);
 
         /// <summary>
         /// Forgets any cached context information, so all subsequent contexs will be treated as new.
