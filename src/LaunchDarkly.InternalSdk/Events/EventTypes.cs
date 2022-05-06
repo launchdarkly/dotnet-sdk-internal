@@ -38,17 +38,17 @@ namespace LaunchDarkly.Sdk.Internal.Events
         /// </summary>
         public struct EvaluationEvent
         {
-            public UnixMillisecondTime Timestamp { get; set; }
-            public User User { get; set; }
-            public string FlagKey { get; set; }
-            public int? FlagVersion { get; set; }
-            public int? Variation { get; set; }
-            public LdValue Value { get; set; }
-            public LdValue Default { get; set; }
-            public EvaluationReason? Reason { get; set; }
-            public string PrereqOf { get; set; }
-            public bool TrackEvents { get; set; }
-            public UnixMillisecondTime? DebugEventsUntilDate { get; set; }
+            public UnixMillisecondTime Timestamp;
+            public Context Context;
+            public string FlagKey;
+            public int? FlagVersion;
+            public int? Variation;
+            public LdValue Value;
+            public LdValue Default;
+            public EvaluationReason? Reason;
+            public string PrereqOf;
+            public bool TrackEvents;
+            public UnixMillisecondTime? DebugEventsUntilDate;
         }
 
         /// <summary>
@@ -56,8 +56,8 @@ namespace LaunchDarkly.Sdk.Internal.Events
         /// </summary>
         public struct IdentifyEvent
         {
-            public UnixMillisecondTime Timestamp { get; set; }
-            public User User { get; set; }
+            public UnixMillisecondTime Timestamp;
+            public Context Context;
         }
 
         /// <summary>
@@ -65,11 +65,11 @@ namespace LaunchDarkly.Sdk.Internal.Events
         /// </summary>
         public struct CustomEvent
         {
-            public UnixMillisecondTime Timestamp { get; set; }
-            public User User { get; set; }
-            public string EventKey { get; set; }
-            public LdValue Data { get; set; }
-            public double? MetricValue { get; set; }
+            public UnixMillisecondTime Timestamp;
+            public Context Context;
+            public string EventKey;
+            public LdValue Data;
+            public double? MetricValue;
         }
     }
 }

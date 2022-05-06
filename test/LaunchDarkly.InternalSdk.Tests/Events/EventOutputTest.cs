@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Immutable;
 using Xunit;
 
 using static LaunchDarkly.Sdk.Internal.Events.EventProcessorInternal;
@@ -10,150 +9,35 @@ namespace LaunchDarkly.Sdk.Internal.Events
     public class EventOutputTest
     {
         private static readonly UnixMillisecondTime _fixedTimestamp = UnixMillisecondTime.OfMillis(100000);
+        private static readonly Context SimpleContext = Context.Builder("userkey").Name("me").Build();
+        private const string SimpleContextJson = @"{""kind"": ""user"", ""key"":""userkey"", ""name"": ""me""}";
+        private const string SimpleContextKeysJson = @"{""user"": ""userkey""}";
 
         [Fact]
-        public void AllUserAttributesAreSerialized()
+        public void ContextKeysAreSetForSingleOrMultiKindContexts()
         {
-            var f = new EventOutputFormatter(new EventsConfiguration());
-            var user = User.Builder("userkey")
-                .Anonymous(true)
-                .Avatar("http://avatar")
-                .Country("US")
-                .Custom("custom1", "value1")
-                .Custom("custom2", "value2")
-                .Email("test@example.com")
-                .FirstName("first")
-                .IPAddress("1.2.3.4")
-                .LastName("last")
-                .Name("me")
-                .Secondary("s")
-                .Build();
-            var userJson = LdValue.Parse(@"{
-                ""key"":""userkey"",
-                ""anonymous"":true,
-                ""avatar"":""http://avatar"",
-                ""country"":""US"",
-                ""custom"":{""custom1"":""value1"",""custom2"":""value2""},
-                ""email"":""test@example.com"",
-                ""firstName"":""first"",
-                ""ip"":""1.2.3.4"",
-                ""lastName"":""last"",
-                ""name"":""me"",
-                ""secondary"":""s""
-                }");
-            TestInlineUserSerialization(user, userJson, new EventsConfiguration());
-        }
+            Action<Context, string> doTest = (Context c, string keysJson) =>
+            {
+                var f = new EventOutputFormatter(new EventsConfiguration());
 
-        [Fact]
-        public void UnsetUserAttributesAreNotSerialized()
-        {
-            var user = User.Builder("userkey")
-                .Build();
-            var userJson = LdValue.Parse(@"{
-                ""key"":""userkey""
-                }");
-            TestInlineUserSerialization(user, userJson, new EventsConfiguration());
-        }
+                var evalEvent = new EvaluationEvent { FlagKey = "flag", Context = c };
+                var outputEvent = SerializeOneEvent(f, evalEvent);
+                Assert.Equal(LdValue.Null, outputEvent.Get("context"));
+                Assert.Equal(LdValue.Parse(keysJson), outputEvent.Get("contextKeys"));
 
-        [Fact]
-        public void AnonymousUserIsSerialized()
-        {
-            var user = User.Builder("anon-key")
-                .Anonymous(true)
-                .Build();
-            var userJson = LdValue.Parse(@"{
-                ""key"":""anon-key"",
-                ""anonymous"":true
-                }");
-            TestInlineUserSerialization(user, userJson, new EventsConfiguration());
-        }
+                var customEvent = new CustomEvent { EventKey = "customkey", Context = c };
+                outputEvent = SerializeOneEvent(f, customEvent);
+                Assert.Equal(LdValue.Null, outputEvent.Get("context"));
+                Assert.Equal(LdValue.Parse(keysJson), outputEvent.Get("contextKeys"));
+            };
 
-        [Fact]
-        public void AllAttributesPrivateMakesAttributesPrivate()
-        {
-            var user = User.Builder("userkey")
-                .Anonymous(true)
-                .Avatar("http://avatar")
-                .Country("US")
-                .Custom("custom1", "value1")
-                .Custom("custom2", "value2")
-                .Email("test@example.com")
-                .FirstName("first")
-                .IPAddress("1.2.3.4")
-                .LastName("last")
-                .Name("me")
-                .Secondary("s")
-                .Build();
-            var userJson = LdValue.Parse(@"{
-                ""key"":""userkey"",
-                ""anonymous"":true,
-                ""privateAttrs"":[
-                    ""avatar"", ""country"", ""custom1"", ""custom2"", ""email"",
-                    ""firstName"", ""ip"", ""lastName"", ""name"", ""secondary""
-                ]
-                }");
-            var config = new EventsConfiguration() { AllAttributesPrivate = true };
-            TestInlineUserSerialization(user, userJson, config);
-        }
-        
-        [Fact]
-        public void GlobalPrivateAttributeNamesMakeAttributesPrivate()
-        {
-            TestPrivateAttribute("avatar", true);
-            TestPrivateAttribute("country", true);
-            TestPrivateAttribute("custom1", true);
-            TestPrivateAttribute("custom2", true);
-            TestPrivateAttribute("email", true);
-            TestPrivateAttribute("firstName", true);
-            TestPrivateAttribute("ip", true);
-            TestPrivateAttribute("lastName", true);
-            TestPrivateAttribute("name", true);
-        }
-        
-        [Fact]
-        public void PerUserPrivateAttributesMakeAttributesPrivate()
-        {
-            TestPrivateAttribute("avatar", false);
-            TestPrivateAttribute("country", false);
-            TestPrivateAttribute("custom1", false);
-            TestPrivateAttribute("custom2", false);
-            TestPrivateAttribute("email", false);
-            TestPrivateAttribute("firstName", false);
-            TestPrivateAttribute("ip", false);
-            TestPrivateAttribute("lastName", false);
-            TestPrivateAttribute("name", false);
-        }
+            var single = Context.NewWithKind("kind1", "key1");
+            var singleJson = @"{""kind1"": ""key1""}";
+            doTest(single, singleJson);
 
-        [Fact]
-        public void UserKeyIsSetInsteadOfUserWhenNotInlined()
-        {
-            var user = User.Builder("userkey")
-                .Name("me")
-                .Build();
-            var userJson = LdValue.Parse(@"{""key"":""userkey"",""name"":""me""}");
-            var f = new EventOutputFormatter(new EventsConfiguration());
-
-            var evalEvent = new EvaluationEvent { FlagKey = "flag", User = user };
-            var outputEvent = SerializeOneEvent(f, evalEvent);
-            Assert.Equal(LdValue.Null, outputEvent.Get("user"));
-            Assert.Equal(user.Key, outputEvent.Get("userKey").AsString);
-
-            // user is always inlined in identify event
-            var identifyEvent = new IdentifyEvent { User = user };
-            outputEvent = SerializeOneEvent(f, identifyEvent);
-            Assert.Equal(LdValue.Null, outputEvent.Get("userKey"));
-            Assert.Equal(userJson, outputEvent.Get("user"));
-
-            var customEvent = new CustomEvent { EventKey = "customkey", User = user };
-            outputEvent = SerializeOneEvent(f, customEvent);
-            Assert.Equal(LdValue.Null, outputEvent.Get("user"));
-            Assert.Equal(user.Key, outputEvent.Get("userKey").AsString);
-
-            // user is always inlined in index event
-            var indexEvent = new IndexEvent { Timestamp = _fixedTimestamp, User = user };
-            outputEvent = SerializeOneEvent(f, indexEvent);
-            Assert.Equal(LdValue.Null, outputEvent.Get("userKey"));
-            Assert.Equal(userJson, outputEvent.Get("user"));
+            var multi = Context.NewMulti(single, Context.NewWithKind("kind2", "key2"));
+            var multiJson = @"{""kind1"": ""key1"", ""kind2"": ""key2""}";
+            doTest(multi, multiJson);
         }
 
         [Fact]
@@ -164,7 +48,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 Timestamp = _fixedTimestamp,
                 FlagKey = "flag",
                 FlagVersion = 11,
-                User = User.Builder("userkey").Name("me").Build(),
+                Context = SimpleContext,
                 Value = LdValue.Of("flagvalue"),
                 Default = LdValue.Of("defaultvalue")
             };
@@ -174,7 +58,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 ""creationDate"":100000,
                 ""key"":""flag"",
                 ""version"":11,
-                ""userKey"":""userkey"",
+                ""contextKeys"":"+SimpleContextKeysJson+@",
                 ""value"":""flagvalue"",
                 ""default"":""defaultvalue""
                 }"));
@@ -186,7 +70,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 ""creationDate"":100000,
                 ""key"":""flag"",
                 ""version"":11,
-                ""userKey"":""userkey"",
+                ""contextKeys"":" + SimpleContextKeysJson + @",
                 ""value"":""flagvalue"",
                 ""variation"":1,
                 ""default"":""defaultvalue""
@@ -200,7 +84,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 ""creationDate"":100000,
                 ""key"":""flag"",
                 ""version"":11,
-                ""userKey"":""userkey"",
+                ""contextKeys"":" + SimpleContextKeysJson + @",
                 ""value"":""flagvalue"",
                 ""variation"":1,
                 ""default"":""defaultvalue"",
@@ -211,7 +95,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             {
                 Timestamp = fe.Timestamp,
                 FlagKey = "flag",
-                User = fe.User,
+                Context = SimpleContext,
                 Value = LdValue.Of("defaultvalue"),
                 Default = LdValue.Of("defaultvalue")
             };
@@ -219,7 +103,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 ""kind"":""feature"",
                 ""creationDate"":100000,
                 ""key"":""flag"",
-                ""userKey"":""userkey"",
+                ""contextKeys"":" + SimpleContextKeysJson + @",
                 ""value"":""defaultvalue"",
                 ""default"":""defaultvalue""
                 }"));
@@ -230,22 +114,9 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 ""creationDate"":100000,
                 ""key"":""flag"",
                 ""version"":11,
-                ""user"":{""key"":""userkey"",""name"":""me""},
+                ""context"":"+SimpleContextJson+@",
                 ""value"":""flagvalue"",
                 ""variation"":1,
-                ""default"":""defaultvalue""
-                }"));
-
-            var eventWithAnonUser = MakeBasicEvent();
-            eventWithAnonUser.User = User.Builder("anon-key").Anonymous(true).Build();
-            TestEventSerialization(eventWithAnonUser, LdValue.Parse(@"{
-                ""kind"":""feature"",
-                ""creationDate"":100000,
-                ""key"":""flag"",
-                ""version"":11,
-                ""userKey"":""anon-key"",
-                ""contextKind"":""anonymousUser"",
-                ""value"":""flagvalue"",
                 ""default"":""defaultvalue""
                 }"));
         }
@@ -254,31 +125,29 @@ namespace LaunchDarkly.Sdk.Internal.Events
         public void IdentifyEventIsSerialized()
         {
             var user = User.Builder("userkey").Name("me").Build();
-            var ie = new IdentifyEvent { Timestamp = _fixedTimestamp, User = user };
+            var ie = new IdentifyEvent { Timestamp = _fixedTimestamp, Context = SimpleContext };
             TestEventSerialization(ie, LdValue.Parse(@"{
                 ""kind"":""identify"",
                 ""creationDate"":100000,
-                ""key"":""userkey"",
-                ""user"":{""key"":""userkey"",""name"":""me""}
+                ""context"":" + SimpleContextJson + @"
                 }"));
         }
 
         [Fact]
         public void CustomEventIsSerialized()
         {
-            var user = User.Builder("userkey").Name("me").Build();
             Func<CustomEvent> MakeBasicEvent = () => new CustomEvent
             {
                 Timestamp = _fixedTimestamp,
                 EventKey = "customkey",
-                User = user
+                Context = SimpleContext
             };
             var ceWithoutData = MakeBasicEvent();
             TestEventSerialization(ceWithoutData, LdValue.Parse(@"{
                 ""kind"":""custom"",
                 ""creationDate"":100000,
                 ""key"":""customkey"",
-                ""userKey"":""userkey""
+                ""contextKeys"":" + SimpleContextKeysJson + @"
                 }"));
 
             var ceWithData = MakeBasicEvent();
@@ -287,7 +156,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 ""kind"":""custom"",
                 ""creationDate"":100000,
                 ""key"":""customkey"",
-                ""userKey"":""userkey"",
+                ""contextKeys"":" + SimpleContextKeysJson + @",
                 ""data"":""thing""
                 }"));
 
@@ -297,7 +166,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 ""kind"":""custom"",
                 ""creationDate"":100000,
                 ""key"":""customkey"",
-                ""userKey"":""userkey"",
+                ""contextKeys"":" + SimpleContextKeysJson + @",
                 ""metricValue"":2.5
                 }"));
 
@@ -308,19 +177,9 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 ""kind"":""custom"",
                 ""creationDate"":100000,
                 ""key"":""customkey"",
-                ""userKey"":""userkey"",
+                ""contextKeys"":" + SimpleContextKeysJson + @",
                 ""data"":""thing"",
                 ""metricValue"":2.5
-                }"));
-
-            var ceWithAnonUser = MakeBasicEvent();
-            ceWithAnonUser.User = User.Builder("anon-key").Anonymous(true).Build();
-            TestEventSerialization(ceWithAnonUser, LdValue.Parse(@"{
-                ""kind"":""custom"",
-                ""creationDate"":100000,
-                ""key"":""customkey"",
-                ""userKey"":""anon-key"",
-                ""contextKind"":""anonymousUser""
                 }"));
         }
 
@@ -375,82 +234,20 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 LdValue.Parse(@"{""unknown"":true,""value"":""default3"",""count"":1}"));
         }
 
-        private void TestInlineUserSerialization(User user, LdValue expectedJsonValue, EventsConfiguration config)
-        {
-            var f = new EventOutputFormatter(config);
-
-            var identifyEvent = new IdentifyEvent { User = user };
-            var outputEvent = SerializeOneEvent(f, identifyEvent);
-            Assert.Equal(LdValue.Null, outputEvent.Get("userKey"));
-            Assert.Equal(expectedJsonValue, outputEvent.Get("user"));
-            Assert.False(outputEvent.Dictionary.ContainsKey("contextKind"));
-
-            var indexEvent = new IndexEvent { User = user };
-            outputEvent = SerializeOneEvent(f, indexEvent);
-            Assert.Equal(LdValue.Null, outputEvent.Get("userKey"));
-            Assert.Equal(expectedJsonValue, outputEvent.Get("user"));
-            Assert.False(outputEvent.Dictionary.ContainsKey("contextKind"));
-        }
-
-        private void TestPrivateAttribute(string privateAttrName, bool globallyPrivate)
-        {
-            var builder = User.Builder("userkey")
-                .Anonymous(true)
-                .Secondary("s");
-            var topJsonBuilder = LdValue.BuildObject()
-                .Add("key", "userkey")
-                .Add("anonymous", true)
-                .Add("secondary", "s");
-            var customJsonBuilder = LdValue.BuildObject();
-            Action<string, Func<string, IUserBuilderCanMakeAttributePrivate>, string, LdValue.ObjectBuilder> setAttr =
-                (attrName, setter, value, jsonBuilder) =>
-                {
-                    if (attrName == privateAttrName)
-                    {
-                        if (globallyPrivate)
-                        {
-                            setter(value);
-                        }
-                        else
-                        {
-                            setter(value).AsPrivateAttribute();
-                        }
-                    }
-                    else
-                    {
-                        setter(value);
-                        jsonBuilder.Add(attrName, value);
-                    }
-                };
-            setAttr("avatar", builder.Avatar, "http://avatar", topJsonBuilder);
-            setAttr("country", builder.Country, "US", topJsonBuilder);
-            setAttr("custom1", v => builder.Custom("custom1", v), "value1", customJsonBuilder);
-            setAttr("custom2", v => builder.Custom("custom2", v), "value2", customJsonBuilder);
-            setAttr("email", builder.Email, "test@example.com", topJsonBuilder);
-            setAttr("firstName", builder.FirstName, "first", topJsonBuilder);
-            setAttr("ip", builder.IPAddress, "1.2.3.4", topJsonBuilder);
-            setAttr("lastName", builder.LastName, "last", topJsonBuilder);
-            setAttr("name", builder.Name, "me", topJsonBuilder);
-
-            topJsonBuilder.Add("custom", customJsonBuilder.Build());
-            topJsonBuilder.Add("privateAttrs", LdValue.ArrayOf(LdValue.Of(privateAttrName)));
-            var userJson = topJsonBuilder.Build();
-            var config = new EventsConfiguration();
-            if (globallyPrivate)
-            {
-                config.PrivateAttributeNames = ImmutableHashSet.Create<UserAttribute>(
-                    UserAttribute.ForName(privateAttrName));
-            };
-
-            TestInlineUserSerialization(builder.Build(), userJson, config);
-        }
-
         private LdValue SerializeOneEvent(EventOutputFormatter f, object e)
         {
             var emptySummary = new EventSummary();
-            var outputEvent = LdValue.Parse(f.SerializeOutputEvents(new object[] { e }, emptySummary, out var count)).Get(0);
-            Assert.Equal(1, count);
-            return outputEvent;
+            var json = f.SerializeOutputEvents(new object[] { e }, emptySummary, out var count);
+            try
+            {
+                var outputEvent = LdValue.Parse(json).Get(0);
+                Assert.Equal(1, count);
+                return outputEvent;
+            }
+            catch (Exception ex)
+            {
+                throw new Exception(string.Format("received invalid JSON ({0}): {1}", ex.Message, json));
+            }
         }
 
         private void TestEventSerialization(object e, LdValue expectedJsonValue)

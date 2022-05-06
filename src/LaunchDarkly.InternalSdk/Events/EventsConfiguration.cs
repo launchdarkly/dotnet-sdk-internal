@@ -38,7 +38,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
         public Uri EventsUri { get; set; }
 
-        public IImmutableSet<UserAttribute> PrivateAttributeNames { get; set;  }
+        public IImmutableSet<AttributeRef> PrivateAttributes { get; set;  }
 
         public TimeSpan? RetryInterval { get; set; }
     }

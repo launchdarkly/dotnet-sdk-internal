@@ -10,27 +10,21 @@ namespace LaunchDarkly.Sdk.Internal.Events
     internal sealed class EventOutputFormatter
     {
         private readonly EventsConfiguration _config;
+        private readonly EventContextFormatter _contextFormatter;
 
         public EventOutputFormatter(EventsConfiguration config)
         {
             _config = config;
+            _contextFormatter = new EventContextFormatter(config);
         }
 
         public string SerializeOutputEvents(object[] events, EventSummary summary, out int eventCountOut)
         {
             var jsonWriter = JWriter.New();
-            var scope = new EventOutputFormatterScope(_config, jsonWriter);
-            eventCountOut = scope.WriteOutputEvents(events, summary);
+            eventCountOut = WriteOutputEvents(events, summary, jsonWriter);
             return jsonWriter.GetString();
         }
-    }
-
-    internal struct EventOutputFormatterScope
-    {
-        private readonly EventsConfiguration _config;
-        private readonly JWriter _jsonWriter;
-        private ObjectWriter _obj;
-
+    
         private struct MutableKeyValuePair<A, B>
         {
             public A Key { get; set; }
@@ -40,92 +34,92 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 new MutableKeyValuePair<A, B> { Key = kv.Key, Value = kv.Value };
         }
 
-        public EventOutputFormatterScope(EventsConfiguration config, JWriter jw)
-        {
-            _config = config;
-            _jsonWriter = jw;
-            _obj = new ObjectWriter();
-        }
-
-        public int WriteOutputEvents(object[] events, EventSummary summary)
+        public int WriteOutputEvents(object[] events, EventSummary summary, IValueWriter w)
         {
             var eventCount = events.Length;
-            var arr = _jsonWriter.Array();
+            var arr = w.Array();
             foreach (var e in events)
             {
-                WriteOutputEvent(e);
+                WriteOutputEvent(e, w);
             }
-            if (summary.Counters.Count > 0)
+            if (!summary.Empty)
             {
-                WriteSummaryEvent(summary);
+                WriteSummaryEvent(summary, arr);
                 eventCount++;
             }
             arr.End();
             return eventCount;
         }
 
-        public void WriteOutputEvent(object e)
+        public void WriteOutputEvent(object e, IValueWriter w)
         {
-            _obj = _jsonWriter.Object();
+            var obj = w.Object();
             switch (e)
             {
                 case EvaluationEvent ee:
-                    WriteEvaluationEvent(ee, false);
+                    WriteEvaluationEvent(ee, ref obj, false);
                     break;
                 case IdentifyEvent ie:
-                    WriteBase("identify", ie.Timestamp, ie.User?.Key);
-                    WriteUser(ie.User);
+                    WriteBase("identify", ref obj, ie.Timestamp, null);
+                    WriteContext(ie.Context, ref obj);
                     break;
                 case CustomEvent ce:
-                    WriteBase("custom", ce.Timestamp, ce.EventKey);
-                    WriteUserOrKey(ce.User, false, true);
+                    WriteBase("custom", ref obj, ce.Timestamp, ce.EventKey);
+                    WriteContextKeys(ce.Context, ref obj);
                     if (!ce.Data.IsNull)
                     {
-                        LdValueConverter.WriteJsonValue(ce.Data, _obj.Name("data"));
+                        LdValueConverter.WriteJsonValue(ce.Data, obj.Name("data"));
                     }
                     if (ce.MetricValue.HasValue)
                     {
-                        _obj.Name("metricValue").Double(ce.MetricValue.Value);
+                        obj.Name("metricValue").Double(ce.MetricValue.Value);
                     }
                     break;
                 case EventProcessorInternal.IndexEvent ie:
-                    WriteBase("index", ie.Timestamp, null);
-                    WriteUserOrKey(ie.User, true, false);
+                    WriteBase("index", ref obj, ie.Timestamp, null);
+                    WriteContext(ie.Context, ref obj);
                     break;
                 case EventProcessorInternal.DebugEvent de:
-                    WriteEvaluationEvent(de.FromEvent, true);
+                    WriteEvaluationEvent(de.FromEvent, ref obj, true);
                     break;
                 default:
                     break;
             }
-            _obj.End();
+            obj.End();
         }
 
-        private void WriteEvaluationEvent(EvaluationEvent ee, bool debug)
+        private void WriteEvaluationEvent(in EvaluationEvent ee, ref ObjectWriter obj, bool debug)
         {
-            WriteBase(debug ? "debug" : "feature", ee.Timestamp, ee.FlagKey);
+            WriteBase(debug ? "debug" : "feature", ref obj, ee.Timestamp, ee.FlagKey);
 
-            WriteUserOrKey(ee.User, debug, true);
+            if (debug)
+            {
+                WriteContext(ee.Context, ref obj);
+            }
+            else
+            {
+                WriteContextKeys(ee.Context, ref obj);
+            }
             if (ee.FlagVersion.HasValue)
             {
-                _obj.Name("version").Int(ee.FlagVersion.Value);
+                obj.Name("version").Int(ee.FlagVersion.Value);
             }
             if (ee.Variation.HasValue)
             {
-                _obj.Name("variation").Int(ee.Variation.Value);
+                obj.Name("variation").Int(ee.Variation.Value);
             }
-            LdValueConverter.WriteJsonValue(ee.Value, _obj.Name("value"));
+            LdValueConverter.WriteJsonValue(ee.Value, obj.Name("value"));
             if (!ee.Default.IsNull)
             {
-                LdValueConverter.WriteJsonValue(ee.Default, _obj.Name("default"));
+                LdValueConverter.WriteJsonValue(ee.Default, obj.Name("default"));
             }
-            _obj.MaybeName("prereqOf", ee.PrereqOf != null).String(ee.PrereqOf);
-            WriteReason(ee.Reason);
+            obj.MaybeName("prereqOf", ee.PrereqOf != null).String(ee.PrereqOf);
+            WriteReason(ee.Reason, ref obj);
         }
 
-        public void WriteSummaryEvent(EventSummary summary)
+        public void WriteSummaryEvent(EventSummary summary, IValueWriter w)
         {
-            var obj = _jsonWriter.Object();
+            var obj = w.Object();
 
             obj.Name("kind").String("summary");
             obj.Name("startDate").Long(summary.StartDate.Value);
@@ -184,78 +178,38 @@ namespace LaunchDarkly.Sdk.Internal.Events
             obj.End();
         }
 
-        private void WriteBase(string kind, UnixMillisecondTime creationDate, string key)
+        private void WriteBase(string kind, ref ObjectWriter obj, UnixMillisecondTime creationDate, string key)
         {
-            _obj.Name("kind").String(kind);
-            _obj.Name("creationDate").Long(creationDate.Value);
-            _obj.MaybeName("key", key != null).String(key);
+            obj.Name("kind").String(kind);
+            obj.Name("creationDate").Long(creationDate.Value);
+            obj.MaybeName("key", key != null).String(key);
         }
 
-        private void WriteUserOrKey(User user, bool forceInline, bool includeContextKind)
+        private void WriteContextKeys(in Context context, ref ObjectWriter obj)
         {
-            if (forceInline)
+            var subObj = obj.Name("contextKeys").Object();
+            if (context.Multiple)
             {
-                WriteUser(user);
-            }
-            else if (user != null)
-            {
-                _obj.Name("userKey").String(user.Key);
-            }
-            if (includeContextKind && user != null && user.Anonymous)
-            {
-                // only "feature", "debug", and "custom" events should ever have contextKind
-                _obj.Name("contextKind").String("anonymousUser");
-            }
-        }
-
-        private void WriteUser(User user)
-        {
-            if (user is null)
-            {
-                return;
-            }
-            var eu = EventUser.FromUser(user, _config);
-
-            var userObj = _obj.Name("user").Object();
-            userObj.Name("key").String(eu.Key);
-            userObj.MaybeName("secondary", eu.Secondary != null).String(eu.Secondary);
-            userObj.MaybeName("ip", eu.IPAddress != null).String(eu.IPAddress);
-            userObj.MaybeName("country", eu.Country != null).String(eu.Country);
-            userObj.MaybeName("firstName", eu.FirstName != null).String(eu.FirstName);
-            userObj.MaybeName("lastName", eu.LastName != null).String(eu.LastName);
-            userObj.MaybeName("name", eu.Name != null).String(eu.Name);
-            userObj.MaybeName("avatar", eu.Avatar != null).String(eu.Avatar);
-            userObj.MaybeName("email", eu.Email != null).String(eu.Email);
-            if (eu.Anonymous.HasValue)
-            {
-                userObj.Name("anonymous").Bool(eu.Anonymous.Value);
-            }
-            if (eu.Custom != null && eu.Custom.Count > 0)
-            {
-                var customObj = userObj.Name("custom").Object();
-                foreach (var kv in eu.Custom)
+                foreach (var mc in context.MultiKindContexts)
                 {
-                    LdValueConverter.WriteJsonValue(kv.Value, customObj.Name(kv.Key));
+                    subObj.Name(mc.Kind).String(mc.Key);
                 }
-                customObj.End();
             }
-            if (eu.PrivateAttrs != null)
+            else
             {
-                var arr = userObj.Name("privateAttrs").Array();
-                foreach (var a in eu.PrivateAttrs)
-                {
-                    arr.String(a);
-                }
-                arr.End();
+                subObj.Name(context.Kind).String(context.Key);
             }
-            userObj.End();
+            subObj.End();
         }
 
-        public void WriteReason(EvaluationReason? reason)
+        private void WriteContext(in Context context, ref ObjectWriter obj) =>
+            _contextFormatter.Write(context, obj.Name("context"));
+
+        public void WriteReason(EvaluationReason? reason, ref ObjectWriter obj)
         {
             if (reason.HasValue)
             {
-                EvaluationReasonConverter.WriteJsonValue(reason.Value, _obj.Name("reason"));
+                EvaluationReasonConverter.WriteJsonValue(reason.Value, obj.Name("reason"));
             }
         }
     }

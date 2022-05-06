@@ -18,8 +18,8 @@ namespace LaunchDarkly.Sdk.Internal.Events
             string flagKey,
             int? flagVersion,
             int? variation,
-            LdValue value,
-            LdValue defaultValue
+            in LdValue value,
+            in LdValue defaultValue
             )
         {
             _eventsState.IncrementCounter(flagKey, variation, flagVersion, value, defaultValue);
@@ -54,7 +54,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             }
         }
 
-        public void IncrementCounter(string key, int? variation, int? version, LdValue flagValue, LdValue defaultVal)
+        public void IncrementCounter(string key, int? variation, int? version, in LdValue flagValue, in LdValue defaultVal)
         {
             EventsCounterKey counterKey = new EventsCounterKey(key, version, variation);
             if (Counters.TryGetValue(counterKey, out EventsCounterValue value))
@@ -116,7 +116,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         public readonly LdValue FlagValue;
         public readonly LdValue Default;
 
-        public EventsCounterValue(int count, LdValue flagValue, LdValue defaultVal)
+        public EventsCounterValue(int count, in LdValue flagValue, in LdValue defaultVal)
         {
             Count = count;
             FlagValue = flagValue;
