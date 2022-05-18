@@ -52,7 +52,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 Assert.Equal(EventsUriPath, request.Path);
                 Assert.Equal(AuthKey, request.Headers.Get("Authorization"));
                 Assert.NotNull(request.Headers.Get("X-LaunchDarkly-Payload-ID"));
-                Assert.Equal("3", request.Headers.Get("X-LaunchDarkly-Event-Schema"));
+                Assert.Equal("4", request.Headers.Get("X-LaunchDarkly-Event-Schema"));
             });
 
 #if !NETFRAMEWORK
