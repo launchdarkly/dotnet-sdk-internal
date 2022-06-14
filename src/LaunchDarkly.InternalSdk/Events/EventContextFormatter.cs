@@ -25,7 +25,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 obj.Name("kind").String("multi");
                 foreach (var mc in c.MultiKindContexts)
                 {
-                    WriteSingle(mc, obj.Name(mc.Kind), false);
+                    WriteSingle(mc, obj.Name(mc.Kind.Value), false);
                 }
                 obj.End();
             }
@@ -41,7 +41,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
             if (includeKind)
             {
-                obj.Name("kind").String(c.Kind);
+                obj.Name("kind").String(c.Kind.Value);
             }
             obj.Name("key").String(c.Key);
             if (c.Transient)
