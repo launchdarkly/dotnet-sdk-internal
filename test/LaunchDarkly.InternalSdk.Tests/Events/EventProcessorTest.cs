@@ -706,12 +706,12 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 {
                     foreach (var mc in context.MultiKindContexts)
                     {
-                        keysObj.Add(mc.Kind, mc.Key);
+                        keysObj.Add(mc.Kind.Value, mc.Key);
                     }
                 }
                 else
                 {
-                    keysObj.Add(context.Kind, context.Key);
+                    keysObj.Add(context.Kind.Value, context.Key);
                 }
                 Assert.Equal(keysObj.Build(), o.Get("contextKeys"));
             }

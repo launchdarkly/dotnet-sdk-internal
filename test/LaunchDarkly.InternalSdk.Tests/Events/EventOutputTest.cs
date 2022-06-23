@@ -31,11 +31,11 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 Assert.Equal(LdValue.Parse(keysJson), outputEvent.Get("contextKeys"));
             };
 
-            var single = Context.NewWithKind("kind1", "key1");
+            var single = Context.New(ContextKind.Of("kind1"), "key1");
             var singleJson = @"{""kind1"": ""key1""}";
             doTest(single, singleJson);
 
-            var multi = Context.NewMulti(single, Context.NewWithKind("kind2", "key2"));
+            var multi = Context.NewMulti(single, Context.New(ContextKind.Of("kind2"), "key2"));
             var multiJson = @"{""kind1"": ""key1"", ""kind2"": ""key2""}";
             doTest(multi, multiJson);
         }
@@ -186,8 +186,8 @@ namespace LaunchDarkly.Sdk.Internal.Events
         [Fact]
         public void SummaryEventIsSerialized()
         {
-            var context1 = Context.NewWithKind("kind1", "key1");
-            var context2 = Context.NewWithKind("kind2", "key2");
+            var context1 = Context.New(ContextKind.Of("kind1"), "key1");
+            var context2 = Context.New(ContextKind.Of("kind2"), "key2");
 
             var summary = new EventSummary();
             summary.NoteTimestamp(UnixMillisecondTime.OfMillis(1001));

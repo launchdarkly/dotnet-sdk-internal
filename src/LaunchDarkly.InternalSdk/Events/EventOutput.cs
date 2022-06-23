@@ -193,12 +193,12 @@ namespace LaunchDarkly.Sdk.Internal.Events
             {
                 foreach (var mc in context.MultiKindContexts)
                 {
-                    subObj.Name(mc.Kind).String(mc.Key);
+                    subObj.Name(mc.Kind.Value).String(mc.Key);
                 }
             }
             else
             {
-                subObj.Name(context.Kind).String(context.Key);
+                subObj.Name(context.Kind.Value).String(context.Key);
             }
             subObj.End();
         }

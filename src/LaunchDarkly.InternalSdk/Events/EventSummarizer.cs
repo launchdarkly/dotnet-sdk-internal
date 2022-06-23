@@ -63,12 +63,12 @@ namespace LaunchDarkly.Sdk.Internal.Events
             {
                 foreach (var mc in context.MultiKindContexts)
                 {
-                    contextKinds.Add(mc.Kind);
+                    contextKinds.Add(mc.Kind.Value);
                 }
             }
             else
             {
-                contextKinds.Add(context.Kind);
+                contextKinds.Add(context.Kind.Value);
             }
 
             EventsCounterKey counterKey = new EventsCounterKey(version, variation);

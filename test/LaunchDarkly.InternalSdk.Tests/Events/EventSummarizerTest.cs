@@ -61,9 +61,9 @@ namespace LaunchDarkly.Sdk.Internal.Events
             int version = 100, variation = 1;
             LdValue value = LdValue.Of("irrelevant");
 
-            var c1 = Context.NewWithKind("kind1", "key1");
-            var c2 = Context.NewWithKind("kind2", "key2");
-            var c3 = Context.NewWithKind("kind3", "key3");
+            var c1 = Context.New(ContextKind.Of("kind1"), "key1");
+            var c2 = Context.New(ContextKind.Of("kind2"), "key2");
+            var c3 = Context.New(ContextKind.Of("kind3"), "key3");
             var multi = Context.NewMulti(c1, c2, c3);
 
             EventSummarizer es = new EventSummarizer();
