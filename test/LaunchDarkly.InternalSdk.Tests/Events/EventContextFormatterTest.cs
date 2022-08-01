@@ -49,9 +49,9 @@ namespace LaunchDarkly.Sdk.Internal.Events
             },
             new Params
             {
-                name = "transient",
-                context = Context.Builder("my-key").Kind("org").Transient(true).Build(),
-                json = @"{""kind"": ""org"", ""key"": ""my-key"", ""transient"": true}"
+                name = "anonymous",
+                context = Context.Builder("my-key").Kind("org").Anonymous(true).Build(),
+                json = @"{""kind"": ""org"", ""key"": ""my-key"", ""anonymous"": true}"
             },
             new Params
             {

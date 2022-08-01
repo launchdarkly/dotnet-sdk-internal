@@ -44,9 +44,9 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 obj.Name("kind").String(c.Kind.Value);
             }
             obj.Name("key").String(c.Key);
-            if (c.Transient)
+            if (c.Anonymous)
             {
-                obj.Name("transient").Bool(true);
+                obj.Name("anonymous").Bool(true);
             }
 
             List<string> redactedList = null;
