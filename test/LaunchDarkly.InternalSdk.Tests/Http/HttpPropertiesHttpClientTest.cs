@@ -69,7 +69,7 @@ namespace LaunchDarkly.Sdk.Internal.Http
             }
         }
 
-#if NETCOREAPP || NET5_0
+#if NETCOREAPP || NET6_0
         [Fact]
         public async Task ClientUsesConnectTimeout()
         {
