@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using LaunchDarkly.Logging;
@@ -383,7 +384,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         private async Task FlushEventsAsync(FlushPayload payload)
         {
             EventOutputFormatter formatter = new EventOutputFormatter(_config);
-            string jsonEvents;
+            byte[] jsonEvents;
             int eventCount;
             try
             {
@@ -410,7 +411,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
         internal async Task SendDiagnosticEventAsync(DiagnosticEvent diagnostic)
         {
-            var jsonDiagnostic = diagnostic.JsonValue.ToJsonString();
+            var jsonDiagnostic = JsonSerializer.SerializeToUtf8Bytes(diagnostic.JsonValue);
             await _eventSender.SendEventDataAsync(EventDataKind.DiagnosticEvent, jsonDiagnostic, 1);
             _testActionOnDiagnosticSend?.Invoke();
         }

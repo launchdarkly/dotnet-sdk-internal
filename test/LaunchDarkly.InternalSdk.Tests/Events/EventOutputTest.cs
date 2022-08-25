@@ -208,7 +208,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             summary.NoteTimestamp(UnixMillisecondTime.OfMillis(1002));
 
             var f = new EventOutputFormatter(new EventsConfiguration());
-            var outputEvent = LdValue.Parse(f.SerializeOutputEvents(new object[0], summary, out var count)).Get(0);
+            var outputEvent = TestUtil.TryParseJson(f.SerializeOutputEvents(new object[0], summary, out var count)).Get(0);
             Assert.Equal(1, count);
 
             Assert.Equal("summary", outputEvent.Get("kind").AsString);

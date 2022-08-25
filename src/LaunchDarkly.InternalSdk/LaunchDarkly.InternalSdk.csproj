@@ -3,9 +3,8 @@
     <Version>2.3.2</Version>
     <!--
       The reason there's a mechanism here for overriding the target frameworks with
-      an environment variable is that we want to be able to run CI tests using older
-      SDKs which do not consider "net5.0" to be a valid target framework that can be
-      referenced in a project file.
+      an environment variable is that we want to be able to run CI tests using .NET
+      SDKs that may not support all of these target frameworks.
     -->
     <BuildFrameworks Condition="'$(BUILDFRAMEWORKS)' == ''">netstandard2.0;netcoreapp3.1;net462;net6.0</BuildFrameworks>
     <TargetFrameworks>$(BUILDFRAMEWORKS)</TargetFrameworks>
@@ -27,8 +26,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="LaunchDarkly.CommonSdk" Version="6.0.0-alpha.4" />
-    <PackageReference Include="LaunchDarkly.Logging" Version="[1.0.1,2.0.0)" />
+    <PackageReference Include="LaunchDarkly.CommonSdk" Version="6.0.0-alpha.5" />
+    <PackageReference Include="LaunchDarkly.Logging" Version="[2.0.0,3.0.0)" />
     <PackageReference Include="System.Collections.Immutable" Version="1.7.1" />
   </ItemGroup>
 

@@ -1,4 +1,5 @@
 using System;
+using System.Text;
 using System.Threading.Tasks;
 using LaunchDarkly.Sdk.Internal.Http;
 using LaunchDarkly.TestHelpers.HttpTest;
@@ -14,6 +15,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         private const string EventsUriPath = "/post-events-here";
         private const string DiagnosticUriPath = "/post-diagnostic-here";
         private const string FakeData = "{\"things\":[]}";
+        private static readonly byte[] FakeDataBytes = Encoding.UTF8.GetBytes(FakeData);
 
         private async Task WithServerAndSender(Handler handler, Func<HttpServer, DefaultEventSender, Task> a)
         {
@@ -42,7 +44,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         public async void AnalyticsEventDataIsSentSuccessfully() =>
             await WithServerAndSender(Handlers.Status(202), async (server, es) =>
             {
-                var result = await es.SendEventDataAsync(EventDataKind.AnalyticsEvents, FakeData, 1);
+                var result = await es.SendEventDataAsync(EventDataKind.AnalyticsEvents, FakeDataBytes, 1);
 
                 Assert.Equal(DeliveryStatus.Succeeded, result.Status);
                 Assert.NotNull(result.TimeFromServer);
@@ -65,7 +67,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             await WithServerAndSender(Handlers.Status(202).
                 Then(Handlers.Header("Date", "Mon, 24 Mar 2014 12:00:00 GMT")), async (server, es) =>
                 {
-                    var result = await es.SendEventDataAsync(EventDataKind.AnalyticsEvents, FakeData, 1);
+                    var result = await es.SendEventDataAsync(EventDataKind.AnalyticsEvents, FakeDataBytes, 1);
 
                     Assert.Equal(DeliveryStatus.Succeeded, result.Status);
                     Assert.Equal(new DateTime(2014, 03, 24, 12, 00, 00), result.TimeFromServer);
@@ -76,8 +78,8 @@ namespace LaunchDarkly.Sdk.Internal.Events
         public async void NewPayloadIdIsGeneratedForEachPayload() =>
             await WithServerAndSender(Handlers.Status(202), async (server, es) =>
             {
-                var result1 = await es.SendEventDataAsync(EventDataKind.AnalyticsEvents, FakeData, 1);
-                var result2 = await es.SendEventDataAsync(EventDataKind.AnalyticsEvents, FakeData, 1);
+                var result1 = await es.SendEventDataAsync(EventDataKind.AnalyticsEvents, FakeDataBytes, 1);
+                var result2 = await es.SendEventDataAsync(EventDataKind.AnalyticsEvents, FakeDataBytes, 1);
 
                 Assert.Equal(DeliveryStatus.Succeeded, result1.Status);
                 Assert.Equal(DeliveryStatus.Succeeded, result2.Status);
@@ -93,7 +95,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         public async void DiagnosticEventDataIsSentSuccessfully() =>
             await WithServerAndSender(Handlers.Status(202), async (server, es) =>
             {
-                var result = await es.SendEventDataAsync(EventDataKind.DiagnosticEvent, FakeData, 1);
+                var result = await es.SendEventDataAsync(EventDataKind.DiagnosticEvent, FakeDataBytes, 1);
 
                 Assert.Equal(DeliveryStatus.Succeeded, result.Status);
                 Assert.NotNull(result.TimeFromServer);
@@ -119,7 +121,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 );
             await WithServerAndSender(handler, async (server, es) =>
             {
-                var result = await es.SendEventDataAsync(EventDataKind.AnalyticsEvents, FakeData, 1);
+                var result = await es.SendEventDataAsync(EventDataKind.AnalyticsEvents, FakeDataBytes, 1);
                 Assert.Equal(DeliveryStatus.Succeeded, result.Status);
                 Assert.NotNull(result.TimeFromServer);
 
@@ -146,7 +148,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
             await WithServerAndSender(handler, async (server, es) =>
             {
-                var result = await es.SendEventDataAsync(EventDataKind.AnalyticsEvents, FakeData, 1);
+                var result = await es.SendEventDataAsync(EventDataKind.AnalyticsEvents, FakeDataBytes, 1);
                 Assert.Equal(DeliveryStatus.Failed, result.Status);
                 Assert.Null(result.TimeFromServer);
 
@@ -166,7 +168,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         public async void VerifyUnrecoverableHttpError(int status) =>
             await WithServerAndSender(Handlers.Status(status), async (server, es) =>
             {
-                var result = await es.SendEventDataAsync(EventDataKind.AnalyticsEvents, FakeData, 1);
+                var result = await es.SendEventDataAsync(EventDataKind.AnalyticsEvents, FakeDataBytes, 1);
                 Assert.Equal(DeliveryStatus.FailedAndMustShutDown, result.Status);
                 Assert.Null(result.TimeFromServer);
 

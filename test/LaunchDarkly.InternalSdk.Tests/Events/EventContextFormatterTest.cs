@@ -1,7 +1,10 @@
 ﻿using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
-using LaunchDarkly.JsonStream;
+using System.IO;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Xunit;
 
 using static LaunchDarkly.TestHelpers.JsonAssertions;
@@ -133,9 +136,11 @@ namespace LaunchDarkly.Sdk.Internal.Events
             // dealing with complex types as test parameters.
             var p = TestCases.Find(c => c.name == testCaseName);
 
-            var w = JWriter.New();
+            var stream = new MemoryStream();
+            var w = new Utf8JsonWriter(stream);
             new EventContextFormatter(p.config ?? new EventsConfiguration()).Write(p.context, w);
-            var json = w.GetString();
+            w.Flush();
+            var json = Encoding.UTF8.GetString(stream.ToArray());
 
             LdValue parsedJson = TestUtil.TryParseJson(json);
             AssertJsonEqual(p.json, ValueWithRedactedAttributesSorted(parsedJson).ToJsonString());

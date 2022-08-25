@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
+using System.Text.Json;
 using LaunchDarkly.Logging;
 using Xunit;
 
@@ -19,11 +21,14 @@ namespace LaunchDarkly.Sdk
             }
         }
 
-        public static LdValue TryParseJson(string json)
+        public static LdValue TryParseJson(string json) =>
+            TryParseJson(Encoding.UTF8.GetBytes(json));
+
+        public static LdValue TryParseJson(byte[] json)
         {
             try
             {
-                return LdValue.Parse(json);
+                return JsonSerializer.Deserialize<LdValue>(json);
             }
             catch (Exception e)
             {

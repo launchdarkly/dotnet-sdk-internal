@@ -812,10 +812,10 @@ namespace LaunchDarkly.Sdk.Internal.Events
         {
             var ec = new EventCapture();
             mockSender.Setup(
-                s => s.SendEventDataAsync(forKind, It.IsAny<string>(), It.IsAny<int>())
-            ).Callback<EventDataKind, string, int>((kind, data, count) =>
+                s => s.SendEventDataAsync(forKind, It.IsAny<byte[]>(), It.IsAny<int>())
+            ).Callback<EventDataKind, byte[], int>((kind, data, count) =>
             {
-                var parsed = LdValue.Parse(data);
+                var parsed = TestUtil.TryParseJson(data);
                 var events = kind == EventDataKind.DiagnosticEvent ? new List<LdValue> { parsed } :
                     parsed.AsList(LdValue.Convert.Json);
                 ec.Events.AddRange(events);

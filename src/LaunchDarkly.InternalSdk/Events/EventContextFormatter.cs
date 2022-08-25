@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
-using LaunchDarkly.JsonStream;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 using static LaunchDarkly.Sdk.Json.LdJsonConverters;
 
@@ -17,17 +18,18 @@ namespace LaunchDarkly.Sdk.Internal.Events
             _globalPrivateAttributes = config.PrivateAttributes ?? Enumerable.Empty<AttributeRef>();
         }
 
-        public void Write(in Context c, IValueWriter w)
+        public void Write(in Context c, Utf8JsonWriter w)
         {
             if (c.Multiple)
             {
-                var obj = w.Object();
-                obj.Name("kind").String("multi");
+                w.WriteStartObject();
+                w.WriteString("kind", "multi");
                 foreach (var mc in c.MultiKindContexts)
                 {
-                    WriteSingle(mc, obj.Name(mc.Kind.Value), false);
+                    w.WritePropertyName(mc.Kind.Value);
+                    WriteSingle(mc, w, false);
                 }
-                obj.End();
+                w.WriteEndObject();
             }
             else
             {
@@ -35,19 +37,16 @@ namespace LaunchDarkly.Sdk.Internal.Events
             }
         }
 
-        private void WriteSingle(in Context c, IValueWriter w, bool includeKind)
+        private void WriteSingle(in Context c, Utf8JsonWriter w, bool includeKind)
         {
-            var obj = w.Object();
+            w.WriteStartObject();
 
             if (includeKind)
             {
-                obj.Name("kind").String(c.Kind.Value);
+                w.WriteString("kind", c.Kind.Value);
             }
-            obj.Name("key").String(c.Key);
-            if (c.Anonymous)
-            {
-                obj.Name("anonymous").Bool(true);
-            }
+            w.WriteString("key", c.Key);
+            JsonConverterHelpers.WriteBooleanIfTrue(w, "anonymous", c.Anonymous);
 
             List<string> redactedList = null;
             var privateRefs = _globalPrivateAttributes.Concat(c.PrivateAttributes);
@@ -58,29 +57,26 @@ namespace LaunchDarkly.Sdk.Internal.Events
                     AddRedacted(ref redactedList, attr); // the entire attribute is redacted
                     continue;
                 }
-                WriteOrRedact(attr, c, ref obj, privateRefs, ref redactedList);
+                WriteOrRedact(attr, c, w, privateRefs, ref redactedList);
             }
 
             if (!(c.Secondary is null) || (!(redactedList is null)))
             {
-                var meta = obj.Name("_meta").Object();
-                if (!(c.Secondary is null))
-                {
-                    meta.Name("secondary").String(c.Secondary);
-                }
+                w.WriteStartObject("_meta");
+                JsonConverterHelpers.WriteStringIfNotNull(w, "secondary", c.Secondary);
                 if (!(redactedList is null))
                 {
-                    var array = meta.Name("redactedAttributes").Array();
+                    w.WriteStartArray("redactedAttributes");
                     foreach (var attr in redactedList)
                     {
-                        array.String(attr);
+                        w.WriteStringValue(attr);
                     }
-                    array.End();
+                    w.WriteEndArray();
                 }
-                meta.End();
+                w.WriteEndObject();
             }
 
-            obj.End();
+            w.WriteEndObject();
         }
 
         // This method implements the context-aware attribute redaction logic, in which an attribute
@@ -90,7 +86,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         private void WriteOrRedact(
             string attrName,
             in Context c,
-            ref ObjectWriter obj,
+            Utf8JsonWriter obj,
             IEnumerable<AttributeRef> privateRefs,
             ref List<string> redactedList
             )
@@ -109,17 +105,18 @@ namespace LaunchDarkly.Sdk.Internal.Events
             var value = c.GetValue(attrName);
             if (value.Type != LdValueType.Object)
             {
-                LdValueConverter.WriteJsonValue(value, obj.Name(attrName));
+                obj.WritePropertyName(attrName);
+                LdValueConverter.WriteJsonValue(value, obj);
                 return;
             }
 
             // The value is a JSON object, and the attribute may need to be partially redacted.
-            WriteRedactedValue(value, ref obj, privateRefs, 0, attrName, ref redactedList);
+            WriteRedactedValue(value, obj, privateRefs, 0, attrName, ref redactedList);
         }
 
         private void WriteRedactedValue(
             in LdValue value,
-            ref ObjectWriter obj,
+            Utf8JsonWriter obj,
             IEnumerable<AttributeRef> allPrivate,
             int depth,
             string pathComponent,
@@ -142,16 +139,17 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
             if (!haveSubpaths || value.Type != LdValueType.Object)
             {
-                LdValueConverter.WriteJsonValue(value, obj.Name(pathComponent));
+                obj.WritePropertyName(pathComponent);
+                LdValueConverter.WriteJsonValue(value, obj);
                 return;
             }
 
-            var subObj = obj.Name(pathComponent).Object();
+            obj.WriteStartObject(pathComponent);
             foreach (var kv in value.Dictionary)
             {
-                WriteRedactedValue(kv.Value, ref subObj, filteredPrivate, depth + 1, kv.Key, ref redactedList);
+                WriteRedactedValue(kv.Value, obj, filteredPrivate, depth + 1, kv.Key, ref redactedList);
             }
-            subObj.End();
+            obj.WriteEndObject();
         }
 
         private void AddRedacted(ref List<string> redactedList, string attrName)

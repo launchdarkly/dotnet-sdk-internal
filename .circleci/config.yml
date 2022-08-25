@@ -46,7 +46,13 @@ jobs:
           command: dotnet build src/LaunchDarkly.InternalSdk
       - run:
           name: run tests
-          command: dotnet test test/LaunchDarkly.InternalSdk.Tests/LaunchDarkly.InternalSdk.Tests.csproj -f <<parameters.test-target-framework>>
+          command: |
+              dotnet test \
+              -l "junit;LogFilePath=/tmp/circle-reports/unit-tests-commonsdk.xml" \
+              -f <<parameters.test-target-framework>> \
+              test/LaunchDarkly.InternalSdk.Tests/LaunchDarkly.InternalSdk.Tests.csproj
+      - store_test_results:
+          path: /tmp/circle-reports
 
   test-windows-netframework:
     parameters:
@@ -69,4 +75,9 @@ jobs:
           command: dotnet build src/LaunchDarkly.InternalSdk -f net462
       - run:
           name: run tests
-          command: dotnet test test/LaunchDarkly.InternalSdk.Tests/LaunchDarkly.InternalSdk.Tests.csproj
+          command: |
+              dotnet test \
+              -l "junit;LogFilePath=/tmp/circle-reports/unit-tests.xml" \
+              test/LaunchDarkly.InternalSdk.Tests/LaunchDarkly.InternalSdk.Tests.csproj
+      - store_test_results:
+          path: /tmp/circle-reports
