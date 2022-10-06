@@ -94,8 +94,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             // First check if the whole attribute is redacted by name.
             foreach (var a in privateRefs)
             {
-                if (a.Depth == 1 && a.TryGetComponent(0, out var firstPathComponent) &&
-                    firstPathComponent.Name == attrName)
+                if (a.Depth == 1 && a.GetComponent(0) == attrName)
                 {
                     AddRedacted(ref redactedList, attrName); // the entire attribute is redacted
                     return;
@@ -123,7 +122,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             ref List<string> redactedList)
         {
             IEnumerable<AttributeRef> filteredPrivate = allPrivate.Where(a =>
-                a.TryGetComponent(depth, out var p) && p.Name == pathComponent);
+                a.GetComponent(depth) == pathComponent);
 
             var haveSubpaths = false;
             foreach (var a in filteredPrivate)
