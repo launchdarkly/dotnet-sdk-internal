@@ -14,7 +14,7 @@ We encourage pull requests and other contributions from the community. Before su
  
 ### Prerequisites
 
-To set up your build time environment, you must [download .NET Core and follow the instructions](https://dotnet.microsoft.com/download) (make sure you have 3.1 or higher).
+To set up your build time environment, you must [download .NET and follow the instructions](https://dotnet.microsoft.com/download). Using the highest supported .NET version is recommended, since newer SDKs are capable of building for older target frameworks but not vice versa.
  
 ### Building
  
@@ -29,8 +29,6 @@ Then, to build the library without running any tests:
 ```
 dotnet build src/LaunchDarkly.InternalSdk
 ```
-
-(If you are building on Linux, add `-f netstandard2.0` so it does not try to build the .NET Framework target, which requires Windows.)
 
 ### Testing
  
