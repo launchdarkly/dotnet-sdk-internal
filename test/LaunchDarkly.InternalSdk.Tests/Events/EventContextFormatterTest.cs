@@ -58,12 +58,6 @@ namespace LaunchDarkly.Sdk.Internal.Events
             },
             new Params
             {
-                name = "secondary",
-                context = Context.Builder("my-key").Kind("org").Secondary("x").Build(),
-                json = @"{""kind"": ""org"", ""key"": ""my-key"", ""_meta"": {""secondary"": ""x""}}"
-            },
-            new Params
-            {
                 name = "all attributes private globally",
                 context = Context.Builder("my-key").Kind("org").
                     Name("my-name").

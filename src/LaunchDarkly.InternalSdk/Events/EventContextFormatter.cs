@@ -60,19 +60,15 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 WriteOrRedact(attr, c, w, privateRefs, ref redactedList);
             }
 
-            if (!(c.Secondary is null) || (!(redactedList is null)))
+            if (!(redactedList is null))
             {
                 w.WriteStartObject("_meta");
-                JsonConverterHelpers.WriteStringIfNotNull(w, "secondary", c.Secondary);
-                if (!(redactedList is null))
+                w.WriteStartArray("redactedAttributes");
+                foreach (var attr in redactedList)
                 {
-                    w.WriteStartArray("redactedAttributes");
-                    foreach (var attr in redactedList)
-                    {
-                        w.WriteStringValue(attr);
-                    }
-                    w.WriteEndArray();
+                    w.WriteStringValue(attr);
                 }
+                w.WriteEndArray();
                 w.WriteEndObject();
             }
 
