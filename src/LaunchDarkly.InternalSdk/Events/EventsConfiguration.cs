@@ -16,6 +16,13 @@ namespace LaunchDarkly.Sdk.Internal.Events
     /// risk since we do not expose this object in the public API and the SDKs have no
     /// reason to retain it after creating the event components.
     /// </para>
+    /// <para>
+    /// Only options that affect the common events implementation code in
+    /// LaunchDarkly.InternalSdk are included here. Anything that is specific to
+    /// LaunchDarkly.ServerSdk or LaunchDarkly.ClientSdk is not included: for instance,
+    /// the cache settings for context deduplication are not included, because that
+    /// behavior is implemented only in the server-side SDK.
+    /// </para>
     /// </remarks>
     public sealed class EventsConfiguration
     {
@@ -31,14 +38,8 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
         public Uri EventsUri { get; set; }
 
-        public bool InlineUsersInEvents { get; set; }
-
-        public IImmutableSet<UserAttribute> PrivateAttributeNames { get; set;  }
+        public IImmutableSet<AttributeRef> PrivateAttributes { get; set;  }
 
         public TimeSpan? RetryInterval { get; set; }
-
-        public int UserKeysCapacity { get; set; }
-
-        public TimeSpan UserKeysFlushInterval { get; set; }
     }
 }

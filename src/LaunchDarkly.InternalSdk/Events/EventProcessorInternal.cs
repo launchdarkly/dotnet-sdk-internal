@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using LaunchDarkly.Logging;
@@ -30,7 +31,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
         internal class FlushMessage : IEventMessage { }
 
-        internal class FlushUsersMessage : IEventMessage { }
+        internal class FlushContextsMessage : IEventMessage { }
 
         internal class DiagnosticMessage : IEventMessage { }
 
@@ -63,15 +64,13 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
         internal struct DebugEvent
         {
-            public EvaluationEvent FromEvent { get; set; }
-            public UnixMillisecondTime Timestamp => FromEvent.Timestamp;
-            public User User => FromEvent.User;
+            public EvaluationEvent FromEvent;
         }
 
         internal struct IndexEvent
         {
-            public UnixMillisecondTime Timestamp { get; set; }
-            public User User { get; set; }
+            public UnixMillisecondTime Timestamp;
+            public Context Context;
         }
 
         internal struct FlushPayload
@@ -116,15 +115,12 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 }
             }
 
-            internal void AddToSummary(EvaluationEvent ee)
-            {
-                _summarizer.SummarizeEvent(ee.Timestamp, ee.FlagKey, ee.FlagVersion, ee.Variation, ee.Value, ee.Default);
-            }
+            internal void AddToSummary(EvaluationEvent ee) =>
+                _summarizer.SummarizeEvent(ee.Timestamp, ee.FlagKey, ee.FlagVersion, ee.Variation, ee.Value, ee.Default,
+                    ee.Context);
 
-            internal FlushPayload GetPayload()
-            {
-                return new FlushPayload { Events = _events.ToArray(), Summary = _summarizer.Snapshot() };
-            }
+            internal FlushPayload GetPayload() =>
+                new FlushPayload { Events = _events.ToArray(), Summary = _summarizer.Snapshot() };
 
             internal void Clear()
             {
@@ -141,7 +137,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
         private readonly EventsConfiguration _config;
         private readonly IDiagnosticStore _diagnosticStore;
-        private readonly IUserDeduplicator _userDeduplicator;
+        private readonly IContextDeduplicator _contextDeduplicator;
         private readonly CountdownEvent _flushWorkersCounter;
         private readonly Action _testActionOnDiagnosticSend;
         private readonly IEventSender _eventSender;
@@ -158,7 +154,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             EventsConfiguration config,
             BlockingCollection<IEventMessage> messageQueue,
             IEventSender eventSender,
-            IUserDeduplicator userDeduplicator,
+            IContextDeduplicator contextDeduplicator,
             IDiagnosticStore diagnosticStore,
             Logger logger,
             Action testActionOnDiagnosticSend
@@ -166,7 +162,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         {
             _config = config;
             _diagnosticStore = diagnosticStore;
-            _userDeduplicator = userDeduplicator;
+            _contextDeduplicator = contextDeduplicator;
             _testActionOnDiagnosticSend = testActionOnDiagnosticSend;
             _flushWorkersCounter = new CountdownEvent(1);
             _eventSender = eventSender;
@@ -222,10 +218,10 @@ namespace LaunchDarkly.Sdk.Internal.Events
                         case FlushMessage fm:
                             StartFlush(buffer);
                             break;
-                        case FlushUsersMessage fm:
-                            if (_userDeduplicator != null)
+                        case FlushContextsMessage fm:
+                            if (_contextDeduplicator != null)
                             {
-                                _userDeduplicator.Flush();
+                                _contextDeduplicator.Flush();
                             }
                             break;
                         case DiagnosticMessage dm:
@@ -277,13 +273,13 @@ namespace LaunchDarkly.Sdk.Internal.Events
             bool willAddFullEvent = true;
             DebugEvent? debugEvent = null;
             UnixMillisecondTime timestamp;
-            User user = null;
+            Context context = new Context();
             switch (e)
             {
                 case EvaluationEvent ee:
                     buffer.AddToSummary(ee); // only evaluation events go into the summarizer
                     timestamp = ee.Timestamp;
-                    user = ee.User;
+                    context = ee.Context;
                     willAddFullEvent = ee.TrackEvents;
                     if (ShouldDebugEvent(ee))
                     {
@@ -292,27 +288,26 @@ namespace LaunchDarkly.Sdk.Internal.Events
                     break;
                 case IdentifyEvent ie:
                     timestamp = ie.Timestamp;
-                    user = ie.User;
+                    context = ie.Context;
                     break;
                 case CustomEvent ce:
                     timestamp = ce.Timestamp;
-                    user = ce.User;
+                    context = ce.Context;
                     break;
                 default:
                     timestamp = new UnixMillisecondTime();
                     break;
             }
 
-            // Tell the user deduplicator, if any, about this user; this may produce an index event.
+            // Tell the context deduplicator, if any, about this user; this may produce an index event.
             // We only need to do this if there is *not* already going to be a full-fidelity event
             // containing an inline user.
-            if (!(willAddFullEvent && _config.InlineUsersInEvents) && user != null
-                && _userDeduplicator != null)
+            if (context.Defined && _contextDeduplicator != null)
             {
-                bool needUserEvent = _userDeduplicator.ProcessUser(user);
+                bool needUserEvent = _contextDeduplicator.ProcessContext(context);
                 if (needUserEvent && !(e is IdentifyEvent))
                 {
-                    IndexEvent ie = new IndexEvent { Timestamp = timestamp, User = user };
+                    IndexEvent ie = new IndexEvent { Timestamp = timestamp, Context = context };
                     buffer.AddEvent(ie);
                 }
                 else if (!(e is IdentifyEvent))
@@ -389,7 +384,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         private async Task FlushEventsAsync(FlushPayload payload)
         {
             EventOutputFormatter formatter = new EventOutputFormatter(_config);
-            string jsonEvents;
+            byte[] jsonEvents;
             int eventCount;
             try
             {
@@ -416,7 +411,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
         internal async Task SendDiagnosticEventAsync(DiagnosticEvent diagnostic)
         {
-            var jsonDiagnostic = diagnostic.JsonValue.ToJsonString();
+            var jsonDiagnostic = JsonSerializer.SerializeToUtf8Bytes(diagnostic.JsonValue);
             await _eventSender.SendEventDataAsync(EventDataKind.DiagnosticEvent, jsonDiagnostic, 1);
             _testActionOnDiagnosticSend?.Invoke();
         }

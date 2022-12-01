@@ -12,7 +12,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
     /// </remarks>
     public interface IEventSender : IDisposable
     {
-        Task<EventSenderResult> SendEventDataAsync(EventDataKind kind, string data, int eventCount);
+        Task<EventSenderResult> SendEventDataAsync(EventDataKind kind, byte[] data, int eventCount);
     }
 
     public enum EventDataKind

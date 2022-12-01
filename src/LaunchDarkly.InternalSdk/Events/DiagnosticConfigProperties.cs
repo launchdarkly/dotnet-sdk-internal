@@ -13,15 +13,6 @@ namespace LaunchDarkly.Sdk.Internal.Events
     public static class DiagnosticConfigProperties
     {
         /// <summary>
-        /// Adds the standard <c>autoAliasingOptOut</c> property.
-        /// </summary>
-        /// <param name="builder">the object builder</param>
-        /// <param name="value">the value</param>
-        /// <returns>the builder</returns>
-        public static LdValue.ObjectBuilder WithAutoAliasingOptOut(this LdValue.ObjectBuilder builder, bool value) =>
-            builder.Set("autoAliasingOptOut", value);
-
-        /// <summary>
         /// Adds the standard properties for events configuration.
         /// </summary>
         /// <param name="builder">the object builder</param>
@@ -37,8 +28,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 .Set("customEventsURI", customEventsBaseUri)
                 .Set("diagnosticRecordingIntervalMillis", config.DiagnosticRecordingInterval.TotalMilliseconds)
                 .Set("eventsCapacity", config.EventCapacity)
-                .Set("eventsFlushIntervalMillis", config.EventFlushInterval.TotalMilliseconds)
-                .Set("inlineUsersInEvents", config.InlineUsersInEvents);
+                .Set("eventsFlushIntervalMillis", config.EventFlushInterval.TotalMilliseconds);
 
         /// <summary>
         /// Adds the standard properties for HTTP configuration.

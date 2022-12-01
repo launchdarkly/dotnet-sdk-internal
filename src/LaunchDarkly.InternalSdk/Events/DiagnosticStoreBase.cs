@@ -230,8 +230,8 @@ namespace LaunchDarkly.Sdk.Internal.Events
             // Environment.OSVersion.Platform is another way to get this information, except that it does not
             // reliably distinguish between MacOS and Linux.
 
-#if NET452
-            // .NET Framework 4.5 does not support RuntimeInformation.ISOSPlatform. We could use Environment.OSVersion.Platform
+#if NETFRAMEWORK
+            // .NET Framework 4.6 does not support RuntimeInformation.ISOSPlatform. We could use Environment.OSVersion.Platform
             // instead (it's similar, except that it can't reliably distinguish between MacOS and Linux)... but .NET 4.5 can't
             // run on anything but Windows anyway.
             return "Windows";
@@ -261,8 +261,8 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
         internal static string GetOSArch()
         {
-#if NET452
-            // .NET Standard 4.5 does not support RuntimeInformation.OSArchitecture
+#if NETFRAMEWORK
+            // .NET Framework 4.6 does not support RuntimeInformation.OSArchitecture
             return "unknown";
 #else
             return RuntimeInformation.OSArchitecture.ToString().ToLower(); // "arm", "arm64", "x64", "x86"
