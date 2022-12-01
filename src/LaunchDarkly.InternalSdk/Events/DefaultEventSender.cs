@@ -1,7 +1,9 @@
 using System;
 using System.Diagnostics;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text;
+using System.Text.Encodings;
 using System.Threading;
 using System.Threading.Tasks;
 using LaunchDarkly.Logging;
@@ -21,7 +23,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         public static readonly TimeSpan DefaultRetryInterval = TimeSpan.FromSeconds(1);
 
         private const int MaxAttempts = 2;
-        private const string CurrentSchemaVersion = "3";
+        private const string CurrentSchemaVersion = "4";
 
         private readonly HttpClient _httpClient;
         private readonly HttpProperties _httpProperties;
@@ -60,7 +62,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             }
         }
 
-        public async Task<EventSenderResult> SendEventDataAsync(EventDataKind kind, string data, int eventCount)
+        public async Task<EventSenderResult> SendEventDataAsync(EventDataKind kind, byte[] data, int eventCount)
         {
             Uri uri;
             string description;
@@ -79,7 +81,8 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 payloadId = Guid.NewGuid().ToString();
             }
 
-            _logger.Debug("Submitting {0} to {1} with json: {2}", description, uri.AbsoluteUri, data);
+            _logger.Debug("Submitting {0} to {1} with json: {2}", description, uri.AbsoluteUri,
+                LogValues.Defer(() => Encoding.UTF8.GetString(data)));
 
             for (var attempt = 0; attempt < MaxAttempts; attempt++)
             {
@@ -97,8 +100,9 @@ namespace LaunchDarkly.Sdk.Internal.Events
                     try
                     {
                         using (var request = PrepareRequest(uri, payloadId))
-                        using (var stringContent = new StringContent(data, Encoding.UTF8, "application/json"))
+                        using (var stringContent = new ByteArrayContent(data))
                         {
+                            stringContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
                             request.Content = stringContent;
                             Stopwatch timer = new Stopwatch();
                             using (var response = await _httpClient.SendAsync(request, cts.Token))

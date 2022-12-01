@@ -56,7 +56,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         public EventProcessor(
             EventsConfiguration config,
             IEventSender eventSender,
-            IUserDeduplicator userDeduplicator,
+            IContextDeduplicator contextDeduplicator,
             IDiagnosticStore diagnosticStore,
             IDiagnosticDisabler diagnosticDisabler,
             Logger logger,
@@ -75,7 +75,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 config,
                 _messageQueue,
                 eventSender,
-                userDeduplicator,
+                contextDeduplicator,
                 diagnosticStore,
                 _logger,
                 testActionOnDiagnosticSend
@@ -88,10 +88,10 @@ namespace LaunchDarkly.Sdk.Internal.Events
             }
             _diagnosticStore = diagnosticStore;
             _diagnosticRecordingInterval = config.DiagnosticRecordingInterval;
-            if (userDeduplicator != null && userDeduplicator.FlushInterval.HasValue)
+            if (contextDeduplicator != null && contextDeduplicator.FlushInterval.HasValue)
             {
-                _flushUsersTimer = new Timer(DoUserKeysFlush, null, userDeduplicator.FlushInterval.Value,
-                    userDeduplicator.FlushInterval.Value);
+                _flushUsersTimer = new Timer(DoUserKeysFlush, null, contextDeduplicator.FlushInterval.Value,
+                    contextDeduplicator.FlushInterval.Value);
             }
             else
             {
@@ -113,16 +113,13 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
         #region Public methods
 
-        public void RecordEvaluationEvent(EvaluationEvent e) =>
+        public void RecordEvaluationEvent(in EvaluationEvent e) =>
             SubmitMessage(new EventProcessorInternal.EventMessage(e));
 
-        public void RecordIdentifyEvent(IdentifyEvent e) =>
+        public void RecordIdentifyEvent(in IdentifyEvent e) =>
             SubmitMessage(new EventProcessorInternal.EventMessage(e));
 
-        public void RecordCustomEvent(CustomEvent e) =>
-            SubmitMessage(new EventProcessorInternal.EventMessage(e));
-
-        public void RecordAliasEvent(AliasEvent e) =>
+        public void RecordCustomEvent(in CustomEvent e) =>
             SubmitMessage(new EventProcessorInternal.EventMessage(e));
 
         public void SetOffline(bool offline)
@@ -254,7 +251,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
         private void DoUserKeysFlush(object stateInfo)
         {
-            SubmitMessage(new EventProcessorInternal.FlushUsersMessage());
+            SubmitMessage(new EventProcessorInternal.FlushContextsMessage());
         }
 
         // exposed for testing 

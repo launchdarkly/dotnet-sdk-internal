@@ -13,7 +13,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
     public struct TestEvalProperties
     {
         public UnixMillisecondTime Timestamp;
-        public User User;
+        public Context Context;
         public int? Variation;
         public LdValue Value;
         public LdValue DefaultValue;
@@ -25,7 +25,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
     {
         public UnixMillisecondTime Timestamp;
         public string Key;
-        public User User;
+        public Context Context;
         public LdValue Data;
         public double? MetricValue;
     }

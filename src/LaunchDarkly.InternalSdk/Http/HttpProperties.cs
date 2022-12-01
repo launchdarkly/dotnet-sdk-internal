@@ -245,7 +245,7 @@ namespace LaunchDarkly.Sdk.Internal.Http
         
         private static HttpMessageHandler DefaultHttpMessageHandlerFactory(HttpProperties props)
         {
-#if NETCOREAPP2_1 || NET5_0
+#if NETCOREAPP || NET6_0
             return new SocketsHttpHandler
             {
                 ConnectTimeout = props.ConnectTimeout,

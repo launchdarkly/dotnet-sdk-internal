@@ -33,47 +33,29 @@ namespace LaunchDarkly.Sdk.Internal.Events
         }
 
         [Fact]
-        public void WithAutoAliasingOptOut()
-        {
-            foreach (var value in new bool[] { false, true })
-            {
-                string expected = LdValue.BuildObject().Add("autoAliasingOptOut", value)
-                    .Build().ToJsonString();
-                string actual = LdValue.BuildObject().WithAutoAliasingOptOut(value)
-                    .Build().ToJsonString();
-                AssertJsonEqual(expected, actual);
-            }
-        }
-
-        [Fact]
         public void WithEventProperties()
         {
             foreach (var customEventsBasUri in new bool[] { false, true })
             {
                 foreach (var allAttributesPrivate in new bool[] { false, true })
                 {
-                    foreach (var inlineUsersInEvents in new bool[] { false, true })
+                    var eventsConfig = new EventsConfiguration
                     {
-                        var eventsConfig = new EventsConfiguration
-                        {
-                            AllAttributesPrivate = allAttributesPrivate,
-                            DiagnosticRecordingInterval = TimeSpan.FromMilliseconds(11111),
-                            EventCapacity = 22222,
-                            EventFlushInterval = TimeSpan.FromMilliseconds(33333),
-                            InlineUsersInEvents = inlineUsersInEvents
-                        };
-                        string expected = LdValue.BuildObject()
-                            .Add("allAttributesPrivate", allAttributesPrivate)
-                            .Add("customEventsURI", customEventsBasUri)
-                            .Add("diagnosticRecordingIntervalMillis", 11111)
-                            .Add("eventsCapacity", 22222)
-                            .Add("eventsFlushIntervalMillis", 33333)
-                            .Add("inlineUsersInEvents", inlineUsersInEvents)
-                            .Build().ToJsonString();
-                        string actual = LdValue.BuildObject().WithEventProperties(eventsConfig, customEventsBasUri)
-                            .Build().ToJsonString();
-                        AssertJsonEqual(expected, actual);
-                    }
+                        AllAttributesPrivate = allAttributesPrivate,
+                        DiagnosticRecordingInterval = TimeSpan.FromMilliseconds(11111),
+                        EventCapacity = 22222,
+                        EventFlushInterval = TimeSpan.FromMilliseconds(33333)
+                    };
+                    string expected = LdValue.BuildObject()
+                        .Add("allAttributesPrivate", allAttributesPrivate)
+                        .Add("customEventsURI", customEventsBasUri)
+                        .Add("diagnosticRecordingIntervalMillis", 11111)
+                        .Add("eventsCapacity", 22222)
+                        .Add("eventsFlushIntervalMillis", 33333)
+                        .Build().ToJsonString();
+                    string actual = LdValue.BuildObject().WithEventProperties(eventsConfig, customEventsBasUri)
+                        .Build().ToJsonString();
+                    AssertJsonEqual(expected, actual);
                 }
             }
         }
