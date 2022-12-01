@@ -8,6 +8,10 @@ publications:
   - url: https://nuget.org/packages/LaunchDarkly.InternalSdk
     description: NuGet
 
+branches:
+  - name: main
+  - name: 2.x
+
 jobs:
   - docker: {}
     template:
