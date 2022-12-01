@@ -2,6 +2,21 @@
 
 All notable changes to `LaunchDarkly.InternalSdk` will be documented in this file. For full release notes for the projects that depend on this project, see their respective changelogs. This file describes changes only to the common code. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [3.0.0] - 2022-12-01
+This major version release of `LaunchDarkly.InternalSdk` corresponds to the upcoming v7.0.0 release of the LaunchDarkly server-side .NET SDK (`LaunchDarkly.ServerSdk`) and the v3.0.0 release of the LaunchDarkly client-side .NET SDK (`LaunchDarkly.ClientSdk`), and cannot be used with earlier SDK versions.
+
+### Changed:
+- .NET Core 2.1, .NET Framework 4.5.2, .NET Framework 4.6.1, and .NET 5.0 are now unsupported. The minimum platform versions are now .NET Core 3.1, .NET Framework 4.6.2, .NET 6.0, and .NET Standard 2.0.
+- Events now use the `Context` type rather than `User`.
+- Private attributes can now be designated with the `AttributeRef` type, which allows redaction of either a full attribute or a property within a JSON object value.
+- There is a new JSON schema for analytics events. The HTTP headers for event payloads now report the schema version as 4.
+- There is no longer a dependency on `LaunchDarkly.JsonStream`. This package existed because some platforms did not support the `System.Text.Json` API, but that is no longer the case and the SDK now uses `System.Text.Json` directly for all of its JSON operations.
+- `EventSender` now takes a byte array instead of a string for the event payload, so we can serialize JSON data directly to UTF8.
+
+### Removed:
+- All alias event functionality
+- `EventsConfiguration.InlineUsersInEvents`
+
 ## [2.3.2] - 2022-02-02
 ### Changed:
 - Updated `LaunchDarkly.CommonSdk` dependency to latest release.
