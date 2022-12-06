@@ -29,7 +29,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             }
         }
 
-        internal class FlushMessage : IEventMessage { }
+        internal class FlushMessage : SynchronousMessage { }
 
         internal class FlushContextsMessage : IEventMessage { }
 
@@ -38,10 +38,12 @@ namespace LaunchDarkly.Sdk.Internal.Events
         internal class SynchronousMessage : IEventMessage
         {
             internal readonly Semaphore _reply;
+            internal readonly TaskCompletionSource<bool> _asyncReply;
 
             internal SynchronousMessage()
             {
                 _reply = new Semaphore(0, 1);
+                _asyncReply = new TaskCompletionSource<bool>();
             }
 
             internal void WaitForCompletion()
@@ -49,9 +51,33 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 _reply.WaitOne();
             }
 
+            internal bool WaitForCompletion(TimeSpan timeout)
+            {
+                if (timeout <= TimeSpan.Zero)
+                {
+                    WaitForCompletion();
+                    return true;
+                }
+                return _reply.WaitOne(timeout);
+            }
+
+            internal Task<bool> WaitForCompletionAsync(TimeSpan timeout)
+            {
+                if (timeout <= TimeSpan.Zero)
+                {
+                    return _asyncReply.Task;
+                }
+                var timeoutTask = Task.Delay(timeout).ContinueWith(t => false);
+                return Task.WhenAny(
+                    _asyncReply.Task,
+                    timeoutTask
+                    ).Result;
+            }
+
             internal void Completed()
             {
                 _reply.Release();
+                _asyncReply.TrySetResult(true);
             }
         }
 
@@ -216,7 +242,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                             ProcessEvent(em.Event, buffer);
                             break;
                         case FlushMessage fm:
-                            StartFlush(buffer);
+                            StartFlush(buffer, fm);
                             break;
                         case FlushContextsMessage fm:
                             if (_contextDeduplicator != null)
@@ -341,10 +367,11 @@ namespace LaunchDarkly.Sdk.Internal.Events
         }
 
         // Grabs a snapshot of the current internal state, and starts a new task to send it to the server.
-        private void StartFlush(EventBuffer buffer)
+        private void StartFlush(EventBuffer buffer, SynchronousMessage message)
         {
             if (_disabled)
             {
+                message.Completed();
                 return;
             }
             FlushPayload payload = buffer.GetPayload();
@@ -362,6 +389,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                     if (_flushWorkersCounter.CurrentCount >= MaxFlushWorkers + 1)
                     {
                         // We already have too many workers, so just leave the events as is
+                        message.Completed();
                         return;
                     }
                     // We haven't hit the limit, we'll go ahead and start a flush task
@@ -376,6 +404,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                     finally
                     {
                         _flushWorkersCounter.Signal();
+                        message.Completed();
                     }
                 });
             }

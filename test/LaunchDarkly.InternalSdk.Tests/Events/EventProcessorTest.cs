@@ -424,7 +424,99 @@ namespace LaunchDarkly.Sdk.Internal.Events
                     item => CheckCustomEvent(item, ce));
             }
         }
-        
+
+        [Fact]
+        public void AsyncFlushWithNoWait()
+        {
+            var mockSender = MakeMockSender();
+            var captured = EventCapture.From(mockSender);
+            captured.Delay = TimeSpan.FromMilliseconds(200);
+
+            using (var ep = MakeProcessor(_config, mockSender))
+            {
+                RecordIdentify(ep, _fixedTimestamp, _context);
+                ep.Flush();
+
+                Assert.Empty(captured.Events); // Flush() returns before flush has actually happened
+
+                captured.AwaitPayload(); // but it does happen if we wait
+                Assert.Collection(captured.Events,
+                    item => CheckIdentifyEvent(item, _fixedTimestamp, _contextJson));
+            };
+        }
+
+        [Fact]
+        public void FlushAndWaitSucceeds()
+        {
+            var mockSender = MakeMockSender();
+            var captured = EventCapture.From(mockSender);
+            captured.Delay = TimeSpan.FromMilliseconds(100);
+
+            using (var ep = MakeProcessor(_config, mockSender))
+            {
+                RecordIdentify(ep, _fixedTimestamp, _context);
+                bool sent = ep.FlushAndWait(TimeSpan.FromMilliseconds(500)); // allow for random execution delays
+
+                Assert.True(sent);
+                Assert.Collection(captured.Events,
+                    item => CheckIdentifyEvent(item, _fixedTimestamp, _contextJson));
+            };
+        }
+
+        [Fact]
+        public void FlushAndWaitTimesOut()
+        {
+            var mockSender = MakeMockSender();
+            var captured = EventCapture.From(mockSender);
+            captured.Delay = TimeSpan.FromMilliseconds(200);
+
+            using (var ep = MakeProcessor(_config, mockSender))
+            {
+                RecordIdentify(ep, _fixedTimestamp, _context);
+                bool sent = ep.FlushAndWait(TimeSpan.FromMilliseconds(10));
+
+                Assert.False(sent);
+                Assert.Empty(captured.Events); // flush hasn't happened yet
+                captured.AwaitPayload(); // but it does happen if we wait
+            };
+        }
+
+        [Fact]
+        public async Task AsyncFlushAndWaitSucceeds()
+        {
+            var mockSender = MakeMockSender();
+            var captured = EventCapture.From(mockSender);
+            captured.Delay = TimeSpan.FromMilliseconds(100);
+
+            using (var ep = MakeProcessor(_config, mockSender))
+            {
+                RecordIdentify(ep, _fixedTimestamp, _context);
+                bool sent = await ep.FlushAndWaitAsync(TimeSpan.FromMilliseconds(500)); // allow for random execution delays
+
+                Assert.True(sent);
+                Assert.Collection(captured.Events,
+                    item => CheckIdentifyEvent(item, _fixedTimestamp, _contextJson));
+            };
+        }
+
+        [Fact]
+        public async Task AsyncFlushAndWaitTimesOut()
+        {
+            var mockSender = MakeMockSender();
+            var captured = EventCapture.From(mockSender);
+            captured.Delay = TimeSpan.FromMilliseconds(200);
+
+            using (var ep = MakeProcessor(_config, mockSender))
+            {
+                RecordIdentify(ep, _fixedTimestamp, _context);
+                bool sent = await ep.FlushAndWaitAsync(TimeSpan.FromMilliseconds(10));
+
+                Assert.False(sent);
+                Assert.Empty(captured.Events); // flush hasn't happened yet
+                captured.AwaitPayload(); // but it does happen if we wait
+            };
+        }
+
         [Fact]
         public void FinalFlushIsDoneOnDispose()
         {
@@ -782,6 +874,8 @@ namespace LaunchDarkly.Sdk.Internal.Events
         public readonly BlockingCollection<LdValue> Payloads = new BlockingCollection<LdValue>();
         public readonly BlockingCollection<LdValue> EventsQueue = new BlockingCollection<LdValue>();
 
+        public TimeSpan? Delay;
+
         public LdValue AwaitPayload(TimeSpan? timeout = null)
         {
             if (!Payloads.TryTake(out var p, timeout ?? TimeSpan.FromSeconds(5)))
@@ -815,6 +909,10 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 s => s.SendEventDataAsync(forKind, It.IsAny<byte[]>(), It.IsAny<int>())
             ).Callback<EventDataKind, byte[], int>((kind, data, count) =>
             {
+                if (ec.Delay.HasValue)
+                {
+                    Thread.Sleep(ec.Delay.Value);
+                }
                 var parsed = TestUtil.TryParseJson(data);
                 var events = kind == EventDataKind.DiagnosticEvent ? new List<LdValue> { parsed } :
                     parsed.AsList(LdValue.Convert.Json);
