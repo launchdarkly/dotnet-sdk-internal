@@ -130,12 +130,51 @@ namespace LaunchDarkly.Sdk.Internal.Events
             // never initiate a flush on its own.
         }
 
+        /// <summary>
+        /// Triggers an asynchronous event flush.
+        /// </summary>
         public void Flush()
         {
             if (!_offline.Get())
             {
                 SubmitMessage(new EventProcessorInternal.FlushMessage());
             }
+        }
+
+        /// <summary>
+        /// Blocking version of <see cref="Flush"/>.
+        /// </summary>
+        /// <param name="timeout">maximum time to wait; zero or negative timeout means indefinitely</param>
+        /// <returns>true if completed, false if timed out</returns>
+        public bool FlushAndWait(TimeSpan timeout)
+        {
+            if (_offline.Get())
+            {
+                return false;
+            }
+            var message = new EventProcessorInternal.FlushMessage();
+            SubmitMessage(message);
+            return message.WaitForCompletion(timeout);
+        }
+
+        /// <summary>
+        /// Asynchronous version of <see cref="FlushAndWait"/>.
+        /// </summary>
+        /// <remarks>
+        /// The difference between this and <see cref="Flush"/> is that you can await the task to simulate
+        /// blocking behavior.
+        /// </remarks>
+        /// <param name="timeout">maximum time to wait; zero or negative timeout means indefinitely</param>
+        /// <returns>a task that resolves to true if completed, false if timed out</returns>
+        public Task<bool> FlushAndWaitAsync(TimeSpan timeout)
+        {
+            if (_offline.Get())
+            {
+                return Task.FromResult(false);
+            }
+            var message = new EventProcessorInternal.FlushMessage();
+            SubmitMessage(message);
+            return message.WaitForCompletionAsync(timeout);
         }
 
         public void Dispose()
