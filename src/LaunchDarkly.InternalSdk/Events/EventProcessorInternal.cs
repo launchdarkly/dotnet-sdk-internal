@@ -408,6 +408,12 @@ namespace LaunchDarkly.Sdk.Internal.Events
                     }
                 });
             }
+            else
+            {
+                // There are no events to flush. If we don't complete the message, then the async task may never
+                // complete (if it had a non-zero positive timeout, then it would complete after the timeout).
+                message.Completed();
+            }
         }
 
         private async Task FlushEventsAsync(FlushPayload payload)
