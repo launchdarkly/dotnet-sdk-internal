@@ -135,6 +135,27 @@ namespace LaunchDarkly.Sdk.Internal.Events
         }
 
         [Fact]
+        public void FlushingNoEventsCompletes()
+        {
+            var mockSender = MakeMockSender();
+            var captured = EventCapture.From(mockSender);
+
+            using (var ep = MakeProcessor(_config, mockSender))
+            {
+                var start = DateTime.Now;
+                // This should complete immediately. If it doesn't then that is a problem.
+                // If this is broken, and you do not provide a timeout, then it could wait forever.
+                ep.FlushAndWait(TimeSpan.FromSeconds(10));
+                var diff = DateTime.Now - start;
+                if (diff.Seconds > 5)
+                {
+                    Assert.Fail("Flushing without events did not complete immediately.");
+                }
+                Assert.Empty(captured.Events);
+            }
+        }
+
+        [Fact]
         public void IdentifyEventIsQueued()
         {
             var mockSender = MakeMockSender();

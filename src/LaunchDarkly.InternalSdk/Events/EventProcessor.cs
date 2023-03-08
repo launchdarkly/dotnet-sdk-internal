@@ -224,6 +224,15 @@ namespace LaunchDarkly.Sdk.Internal.Events
                     {
                         _logger.Warn("Events are being produced faster than they can be processed");
                     }
+                    // If the message is a flush message, then it could never be completed if we cannot
+                    // add it to the queue. So we are going to complete it here to prevent the calling
+                    // code from hanging indefinitely.
+                    switch (message)
+                    {
+                        case EventProcessorInternal.FlushMessage fm:
+                            fm.Completed();
+                            break;
+                    }
                 }
             }
             catch (InvalidOperationException)
