@@ -2,6 +2,10 @@
 
 All notable changes to `LaunchDarkly.InternalSdk` will be documented in this file. For full release notes for the projects that depend on this project, see their respective changelogs. This file describes changes only to the common code. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [3.1.2] - 2023-04-21
+### Changed:
+- Updated `LaunchDarkly.CommonSdk` to `6.0.1`.
+
 ## [3.1.1] - 2023-03-08
 ### Fixed:
 - Fixed an issue where calling `FlushAndWait` with `TimeSpan.Zero` would never complete if there were no events to flush.
