@@ -4,6 +4,7 @@ using System.Collections.Immutable;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using LaunchDarkly.Sdk.Internal.Helpers;
 
 namespace LaunchDarkly.Sdk.Internal.Http
 {
@@ -176,6 +177,16 @@ namespace LaunchDarkly.Sdk.Internal.Http
                     string.IsNullOrEmpty(wrapperVersion) ? wrapperName :
                         wrapperName + "/" + wrapperVersion);
 
+        public HttpProperties WithApplicationTags(ApplicationInfo applicationInfo)
+        {
+            string headerValue = ApplicationTagHeaderValue(applicationInfo);
+            if (string.IsNullOrEmpty(headerValue))
+            {
+                return this;
+            }
+            return WithHeader("X-LaunchDarkly-Tags", headerValue);
+        }
+        
         public HttpProperties WithHeader(string name, string value) =>
             new HttpProperties(
                 BaseHeaders.Where(kv => !string.Equals(kv.Key, name, StringComparison.OrdinalIgnoreCase))
@@ -258,6 +269,42 @@ namespace LaunchDarkly.Sdk.Internal.Http
             }
             return null;
 #endif
+        }
+        
+        /// <summary>
+        /// Creates the header tag value for the provided <see cref="ApplicationInfo"/>.  Omits properties
+        /// that are invalid.
+        /// </summary>
+        /// <returns>The header tag value. Possibly empty string if no valid properties exist.</returns>
+        private static string ApplicationTagHeaderValue(ApplicationInfo applicationInfo)
+        {
+            String[][] tags = new String[][]
+            {
+                // Note these must be in alphabetical order
+                new String[] { "application-id", applicationInfo.ApplicationID },
+                new String[] { "application-name", applicationInfo.ApplicationName },
+                new String[] { "application-version", applicationInfo.ApplicationVersion },
+                new String[] { "application-version-name", applicationInfo.ApplicationVersionName }
+            };
+            List<String> parts = new List<String>();
+            foreach (String[] row in tags)
+            {
+                String tagKey = row[0];
+                String tagVal = row[1];
+                if (tagVal == null)
+                {
+                    continue;
+                }
+
+                String error = ValidationUtils.ValidateStringValue(tagVal);
+                if (error != null)
+                {
+                    continue;
+                }
+                parts.Add($"{tagKey}/{tagVal}");
+            }
+            
+            return String.Join(" ", parts);
         }
     }
 }

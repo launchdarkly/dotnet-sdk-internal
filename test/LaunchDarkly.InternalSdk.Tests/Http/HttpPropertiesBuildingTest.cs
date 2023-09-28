@@ -1,10 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Net;
+using System.Linq;
 using System.Net.Http;
-using System.Threading;
-using System.Threading.Tasks;
-using LaunchDarkly.TestHelpers.HttpTest;
 using Xunit;
 
 namespace LaunchDarkly.Sdk.Internal.Http
@@ -112,6 +109,31 @@ namespace LaunchDarkly.Sdk.Internal.Http
                 "X-LaunchDarkly-Wrapper", "x");
             ExpectSingleHeader(HttpProperties.Default.WithWrapper("x", "1.0.0"),
                 "X-LaunchDarkly-Wrapper", "x/1.0.0");
+        }
+
+        [Fact]
+        public void ApplicationTags()
+        {
+            ExpectSingleHeader(HttpProperties.Default.WithApplicationTags(new ApplicationInfo("mockId", null, null, null)),
+                "X-LaunchDarkly-Tags", "application-id/mockId");
+
+            ExpectSingleHeader(HttpProperties.Default.WithApplicationTags(new ApplicationInfo("mockId", "mockName", null, null)),
+                "X-LaunchDarkly-Tags", "application-id/mockId application-name/mockName");
+
+            ExpectSingleHeader(HttpProperties.Default.WithApplicationTags(new ApplicationInfo("mockId", "mockName", "mockVersion", null)),
+                "X-LaunchDarkly-Tags", "application-id/mockId application-name/mockName application-version/mockVersion");
+
+            ExpectSingleHeader(HttpProperties.Default.WithApplicationTags(new ApplicationInfo("mockId", "mockName", "mockVersion", "mockVersionName")),
+                "X-LaunchDarkly-Tags", "application-id/mockId application-name/mockName application-version/mockVersion application-version-name/mockVersionName");
+            
+            ExpectSingleHeader(HttpProperties.Default.WithApplicationTags(new ApplicationInfo("ok", null, "bad-\n", null)),
+                "X-LaunchDarkly-Tags", "application-id/ok");
+            
+            var props = HttpProperties.Default.WithApplicationTags(new ApplicationInfo(null, null, null, null));
+            Assert.Equal(
+                Enumerable.Empty<KeyValuePair<string, string>>(),
+                props.BaseHeaders
+            );
         }
 
         private void ExpectSingleHeader(HttpProperties hp, string name, string value)
