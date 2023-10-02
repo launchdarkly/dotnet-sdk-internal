@@ -4,7 +4,7 @@ using System.Collections.Immutable;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
-using LaunchDarkly.Sdk.Internal.Helpers;
+using LaunchDarkly.Sdk.Helpers;
 
 namespace LaunchDarkly.Sdk.Internal.Http
 {
@@ -186,7 +186,7 @@ namespace LaunchDarkly.Sdk.Internal.Http
             }
             return WithHeader("X-LaunchDarkly-Tags", headerValue);
         }
-        
+
         public HttpProperties WithHeader(string name, string value) =>
             new HttpProperties(
                 BaseHeaders.Where(kv => !string.Equals(kv.Key, name, StringComparison.OrdinalIgnoreCase))
@@ -253,7 +253,7 @@ namespace LaunchDarkly.Sdk.Internal.Http
         /// <returns>the fully configured handler</returns>
         public HttpMessageHandler NewHttpMessageHandler() =>
             (HttpMessageHandlerFactory ?? DefaultHttpMessageHandlerFactory)(this);
-        
+
         private static HttpMessageHandler DefaultHttpMessageHandlerFactory(HttpProperties props)
         {
 #if NETCOREAPP || NET6_0
@@ -270,7 +270,7 @@ namespace LaunchDarkly.Sdk.Internal.Http
             return null;
 #endif
         }
-        
+
         /// <summary>
         /// Creates the header tag value for the provided <see cref="ApplicationInfo"/>.  Omits properties
         /// that are invalid.
@@ -281,7 +281,7 @@ namespace LaunchDarkly.Sdk.Internal.Http
             String[][] tags = new String[][]
             {
                 // Note these must be in alphabetical order
-                new String[] { "application-id", applicationInfo.ApplicationID },
+                new String[] { "application-id", applicationInfo.ApplicationId },
                 new String[] { "application-name", applicationInfo.ApplicationName },
                 new String[] { "application-version", applicationInfo.ApplicationVersion },
                 new String[] { "application-version-name", applicationInfo.ApplicationVersionName }
@@ -303,7 +303,7 @@ namespace LaunchDarkly.Sdk.Internal.Http
                 }
                 parts.Add($"{tagKey}/{tagVal}");
             }
-            
+
             return String.Join(" ", parts);
         }
     }
