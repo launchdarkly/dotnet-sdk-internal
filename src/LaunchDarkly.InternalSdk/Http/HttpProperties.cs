@@ -4,6 +4,7 @@ using System.Collections.Immutable;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using LaunchDarkly.Sdk.Helpers;
 
 namespace LaunchDarkly.Sdk.Internal.Http
 {
@@ -85,7 +86,7 @@ namespace LaunchDarkly.Sdk.Internal.Http
             Func<HttpProperties, HttpMessageHandler> httpMessageHandlerFactory,
             IWebProxy proxy,
             TimeSpan readTimeout
-            )
+        )
         {
             BaseHeaders = baseHeaders;
             ConnectTimeout = connectTimeout;
@@ -106,7 +107,7 @@ namespace LaunchDarkly.Sdk.Internal.Http
                 null,
                 null,
                 DefaultReadTimeout
-                );
+            );
 
         public HttpProperties WithConnectTimeout(TimeSpan newConnectTimeout) =>
             new HttpProperties(
@@ -116,7 +117,7 @@ namespace LaunchDarkly.Sdk.Internal.Http
                 HttpMessageHandlerFactory,
                 Proxy,
                 ReadTimeout
-                );
+            );
 
         public HttpProperties WithHttpMessageHandlerFactory(Func<HttpProperties, HttpMessageHandler> factory) =>
             new HttpProperties(
@@ -126,7 +127,7 @@ namespace LaunchDarkly.Sdk.Internal.Http
                 factory,
                 Proxy,
                 ReadTimeout
-                );
+            );
 
         public HttpProperties WithHttpExceptionConverter(Func<Exception, Exception> newHttpExceptionConverter) =>
             new HttpProperties(
@@ -136,7 +137,7 @@ namespace LaunchDarkly.Sdk.Internal.Http
                 HttpMessageHandlerFactory,
                 Proxy,
                 ReadTimeout
-                );
+            );
 
         public HttpProperties WithProxy(IWebProxy newProxy) =>
             new HttpProperties(
@@ -146,7 +147,7 @@ namespace LaunchDarkly.Sdk.Internal.Http
                 HttpMessageHandlerFactory,
                 newProxy,
                 ReadTimeout
-                );
+            );
 
         public HttpProperties WithReadTimeout(TimeSpan newReadTimeout) =>
             new HttpProperties(
@@ -156,25 +157,35 @@ namespace LaunchDarkly.Sdk.Internal.Http
                 HttpMessageHandlerFactory,
                 Proxy,
                 newReadTimeout
-                );
+            );
 
         public HttpProperties WithAuthorizationKey(string key) =>
-            string.IsNullOrEmpty(key) ? this :
-                WithHeader("Authorization", key);
+            string.IsNullOrEmpty(key) ? this : WithHeader("Authorization", key);
 
         public HttpProperties WithUserAgent(string userAgent) =>
-            string.IsNullOrEmpty(userAgent) ? this :
-                WithHeader("User-Agent", userAgent);
+            string.IsNullOrEmpty(userAgent) ? this : WithHeader("User-Agent", userAgent);
 
         public HttpProperties WithUserAgent(string userAgentName, string userAgentVersion) =>
-            string.IsNullOrEmpty(userAgentName) ? this :
-                WithHeader("User-Agent", userAgentName + "/" + userAgentVersion);
+            string.IsNullOrEmpty(userAgentName)
+                ? this
+                : WithHeader("User-Agent", userAgentName + "/" + userAgentVersion);
 
         public HttpProperties WithWrapper(string wrapperName, string wrapperVersion) =>
-            string.IsNullOrEmpty(wrapperName) ? this :
-                WithHeader("X-LaunchDarkly-Wrapper",
-                    string.IsNullOrEmpty(wrapperVersion) ? wrapperName :
-                        wrapperName + "/" + wrapperVersion);
+            string.IsNullOrEmpty(wrapperName)
+                ? this
+                : WithHeader("X-LaunchDarkly-Wrapper",
+                    string.IsNullOrEmpty(wrapperVersion) ? wrapperName : wrapperName + "/" + wrapperVersion);
+
+        public HttpProperties WithApplicationTags(ApplicationInfo applicationInfo)
+        {
+            string headerValue = ApplicationTagHeaderValue(applicationInfo);
+            if (string.IsNullOrEmpty(headerValue))
+            {
+                return this;
+            }
+
+            return WithHeader("X-LaunchDarkly-Tags", headerValue);
+        }
 
         public HttpProperties WithHeader(string name, string value) =>
             new HttpProperties(
@@ -185,7 +196,7 @@ namespace LaunchDarkly.Sdk.Internal.Http
                 HttpMessageHandlerFactory,
                 Proxy,
                 ReadTimeout
-                );
+            );
 
         /// <summary>
         /// Adds BaseHeaders to a request.
@@ -199,6 +210,7 @@ namespace LaunchDarkly.Sdk.Internal.Http
                 rh.Add(h.Key, h.Value);
             }
         }
+
         /// <summary>
         /// Creates an <c>HttpClient</c> instance based on this configuration.
         /// </summary>
@@ -230,9 +242,7 @@ namespace LaunchDarkly.Sdk.Internal.Http
         public HttpClient NewHttpClient()
         {
             var handler = (HttpMessageHandlerFactory ?? DefaultHttpMessageHandlerFactory)(this);
-            return handler is null ?
-                new HttpClient() :
-                new HttpClient(handler, false);
+            return handler is null ? new HttpClient() : new HttpClient(handler, false);
         }
 
         /// <summary>
@@ -242,7 +252,7 @@ namespace LaunchDarkly.Sdk.Internal.Http
         /// <returns>the fully configured handler</returns>
         public HttpMessageHandler NewHttpMessageHandler() =>
             (HttpMessageHandlerFactory ?? DefaultHttpMessageHandlerFactory)(this);
-        
+
         private static HttpMessageHandler DefaultHttpMessageHandlerFactory(HttpProperties props)
         {
 #if NETCOREAPP || NET6_0
@@ -256,8 +266,43 @@ namespace LaunchDarkly.Sdk.Internal.Http
             {
                 return new HttpClientHandler { Proxy = props.Proxy };
             }
+
             return null;
 #endif
+        }
+
+        /// <summary>
+        /// Creates the header tag value for the provided <see cref="ApplicationInfo"/>.  Omits properties
+        /// that are invalid.
+        /// </summary>
+        /// <returns>The header tag value. Possibly empty string if no valid properties exist.</returns>
+        private static string ApplicationTagHeaderValue(ApplicationInfo applicationInfo)
+        {
+            var tags = new List<(string, string)>
+            {
+                // Note these must be in alphabetical order
+                ("application-id", applicationInfo.ApplicationId),
+                ("application-name", applicationInfo.ApplicationName),
+                ("application-version", applicationInfo.ApplicationVersion),
+                ("application-version-name", applicationInfo.ApplicationVersionName)
+            };
+            var parts = new List<string>();
+            foreach (var (tagKey, tagVal) in tags)
+            {
+                if (tagVal == null)
+                {
+                    continue;
+                }
+
+                var error = ValidationUtils.ValidateStringValue(tagVal);
+                if (error != null)
+                {
+                    continue;
+                }
+                parts.Add($"{tagKey}/{tagVal}");
+            }
+
+            return string.Join(" ", parts);
         }
     }
 }
