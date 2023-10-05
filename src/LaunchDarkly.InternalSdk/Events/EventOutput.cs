@@ -1,7 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
-
 using static LaunchDarkly.Sdk.Internal.Events.EventTypes;
 using static LaunchDarkly.Sdk.Json.LdJsonConverters;
 
@@ -30,14 +29,14 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 }
             }
         }
-    
+
         private struct MutableKeyValuePair<A, B>
         {
             public A Key { get; set; }
             public B Value { get; set; }
 
             public static MutableKeyValuePair<A, B> FromKeyValue(KeyValuePair<A, B> kv) =>
-                new MutableKeyValuePair<A, B> { Key = kv.Key, Value = kv.Value };
+                new MutableKeyValuePair<A, B> {Key = kv.Key, Value = kv.Value};
         }
 
         public int WriteOutputEvents(object[] events, EventSummary summary, Utf8JsonWriter w)
@@ -48,11 +47,13 @@ namespace LaunchDarkly.Sdk.Internal.Events
             {
                 WriteOutputEvent(e, w);
             }
+
             if (!summary.Empty)
             {
                 WriteSummaryEvent(summary, w);
                 eventCount++;
             }
+
             w.WriteEndArray();
             return eventCount;
         }
@@ -77,6 +78,10 @@ namespace LaunchDarkly.Sdk.Internal.Events
                     {
                         w.WriteNumber("metricValue", ce.MetricValue.Value);
                     }
+
+                    break;
+                case MigrationOpEvent me:
+                    WriteMigrationOpEvent(me, w);
                     break;
                 case EventProcessorInternal.IndexEvent ie:
                     WriteBase("index", w, ie.Timestamp, null);
@@ -88,6 +93,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 default:
                     break;
             }
+
             w.WriteEndObject();
         }
 
@@ -103,6 +109,12 @@ namespace LaunchDarkly.Sdk.Internal.Events
             {
                 WriteContextKeys(ee.Context, obj);
             }
+
+            if (ee.SamplingRatio.HasValue && ee.SamplingRatio != 1)
+            {
+                obj.WriteNumber("samplingRatio", ee.SamplingRatio.Value);
+            }
+
             JsonConverterHelpers.WriteIntIfNotNull(obj, "version", ee.FlagVersion);
             JsonConverterHelpers.WriteIntIfNotNull(obj, "variation", ee.Variation);
             JsonConverterHelpers.WriteLdValue(obj, "value", ee.Value);
@@ -134,6 +146,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 {
                     w.WriteStringValue(kind);
                 }
+
                 w.WriteEndArray();
 
                 w.WriteStartArray("counters");
@@ -180,6 +193,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             {
                 obj.WriteString(context.Kind.Value, context.Key);
             }
+
             obj.WriteEndObject();
         }
 
@@ -189,13 +203,142 @@ namespace LaunchDarkly.Sdk.Internal.Events
             _contextFormatter.Write(context, obj);
         }
 
-        public void WriteReason(EvaluationReason? reason, Utf8JsonWriter obj)
+        private static void WriteReason(EvaluationReason? reason, Utf8JsonWriter obj)
         {
             if (reason.HasValue)
             {
                 obj.WritePropertyName("reason");
                 EvaluationReasonConverter.WriteJsonValue(reason.Value, obj);
             }
+        }
+
+        private void WriteMigrationOpEvent(MigrationOpEvent migrationOpEvent, Utf8JsonWriter obj)
+        {
+            WriteBase("migration_op", obj, migrationOpEvent.Timestamp, null);
+            WriteContextKeys(migrationOpEvent.Context, obj);
+            if (migrationOpEvent.SamplingRatio != 1)
+            {
+                obj.WriteNumber("samplingRatio", migrationOpEvent.SamplingRatio);
+            }
+
+            obj.WriteString("operation", migrationOpEvent.Operation);
+            WriteMigrationEvaluation(migrationOpEvent, obj);
+            WriteMeasurements(migrationOpEvent, obj);
+        }
+
+        private static void WriteMigrationEvaluation(MigrationOpEvent migrationOpEvent, Utf8JsonWriter obj)
+        {
+            obj.WritePropertyName("evaluation");
+            obj.WriteStartObject();
+            obj.WriteString("key", migrationOpEvent.FlagKey);
+            JsonConverterHelpers.WriteIntIfNotNull(obj, "version", migrationOpEvent.FlagVersion);
+            JsonConverterHelpers.WriteIntIfNotNull(obj, "variation", migrationOpEvent.Variation);
+            JsonConverterHelpers.WriteLdValue(obj, "value", migrationOpEvent.Value);
+            JsonConverterHelpers.WriteLdValueIfNotNull(obj, "default", migrationOpEvent.Default);
+            WriteReason(migrationOpEvent.Reason, obj);
+            obj.WriteEndObject();
+        }
+
+        private static void WriteMeasurements(MigrationOpEvent migrationOpEvent, Utf8JsonWriter obj)
+        {
+            obj.WritePropertyName("measurements");
+            obj.WriteStartArray();
+
+            WriteInvokedMeasurement(migrationOpEvent, obj);
+            WriteErrorMeasurement(migrationOpEvent, obj);
+            WriteLatencyMeasurement(migrationOpEvent, obj);
+            WriteConsistentMeasurement(migrationOpEvent, obj);
+
+            obj.WriteEndArray();
+        }
+
+        private static void WriteInvokedMeasurement(MigrationOpEvent migrationOpEvent, Utf8JsonWriter obj)
+        {
+            obj.WriteStartObject();
+
+            obj.WriteString("key", "invoked");
+            obj.WritePropertyName("values");
+
+            obj.WriteStartObject();
+            if (migrationOpEvent.Invoked.Old)
+            {
+                obj.WriteBoolean("old", true);
+            }
+
+            if (migrationOpEvent.Invoked.New)
+            {
+                obj.WriteBoolean("new", true);
+            }
+
+            obj.WriteEndObject(); // end values
+
+            obj.WriteEndObject(); // end measurement
+        }
+
+        private static void WriteLatencyMeasurement(MigrationOpEvent migrationOpEvent, Utf8JsonWriter obj)
+        {
+            if (!migrationOpEvent.Latency.HasValue ||
+                (!migrationOpEvent.Latency.Value.Old.HasValue && !migrationOpEvent.Latency.Value.New.HasValue)) return;
+
+            obj.WriteStartObject();
+
+            obj.WriteString("key", "latency_ms");
+            obj.WritePropertyName("values");
+
+            obj.WriteStartObject();
+            if (migrationOpEvent.Latency.Value.Old.HasValue)
+            {
+                obj.WriteNumber("old", migrationOpEvent.Latency.Value.Old.Value);
+            }
+
+            if (migrationOpEvent.Latency.Value.New.HasValue)
+            {
+                obj.WriteNumber("new", migrationOpEvent.Latency.Value.New.Value);
+            }
+
+            obj.WriteEndObject(); // end values
+
+            obj.WriteEndObject(); // end measurement
+        }
+
+        private static void WriteErrorMeasurement(MigrationOpEvent migrationOpEvent, Utf8JsonWriter obj)
+        {
+            if (!migrationOpEvent.Error.HasValue ||
+                (!migrationOpEvent.Error.Value.Old && !migrationOpEvent.Error.Value.New)) return;
+
+            obj.WriteStartObject();
+            obj.WriteString("key", "error");
+            obj.WritePropertyName("values");
+
+            obj.WriteStartObject();
+            if (migrationOpEvent.Error.Value.Old)
+            {
+                obj.WriteBoolean("old", true);
+            }
+
+            if (migrationOpEvent.Error.Value.New)
+            {
+                obj.WriteBoolean("new", true);
+            }
+
+            obj.WriteEndObject(); // end values
+
+            obj.WriteEndObject(); // end measurement
+        }
+
+        private static void WriteConsistentMeasurement(MigrationOpEvent migrationOpEvent, Utf8JsonWriter obj)
+        {
+            if (!migrationOpEvent.Consistent.HasValue) return;
+
+            obj.WriteStartObject();
+            obj.WriteString("key", "consistent");
+            obj.WriteBoolean("value", migrationOpEvent.Consistent.Value.IsConsistent);
+            if (migrationOpEvent.Consistent.Value.SamplingRatio != 1)
+            {
+                obj.WriteNumber("samplingRatio", migrationOpEvent.Consistent.Value.SamplingRatio);
+            }
+
+            obj.WriteEndObject();
         }
     }
 }

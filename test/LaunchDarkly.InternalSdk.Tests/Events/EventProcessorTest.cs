@@ -170,7 +170,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                     item => CheckIdentifyEvent(item, _fixedTimestamp, _contextJson));
             }
         }
-        
+
         [Fact]
         public void IndividualFeatureEventIsQueuedWithIndexEvent()
         {
@@ -186,6 +186,56 @@ namespace LaunchDarkly.Sdk.Internal.Events
                     item => CheckIndexEvent(item, BasicEval.Timestamp, _contextJson),
                     item => CheckFeatureEvent(item, BasicFlagWithTracking, BasicEval),
                     item => CheckSummaryEvent(item));
+            }
+        }
+
+        [Fact]
+        public void ItDoesNotQueueAFeatureEventWithSamplingRatioOfZero()
+        {
+            var mockSender = MakeMockSender();
+            var captured = EventCapture.From(mockSender);
+
+            using (var ep = MakeProcessor(_config, mockSender))
+            {
+                ep.RecordEvaluationEvent(new EvaluationEvent
+                {
+                    FlagKey =  "the-flag",
+                    Value = LdValue.Of("value"),
+                    Default = LdValue.Of("default"),
+                    SamplingRatio = 0,
+                    Context = _context,
+                    Timestamp = BasicEval.Timestamp
+                });
+                FlushAndWait(ep, captured);
+
+                Assert.Collection(captured.Events,
+                    item => CheckIndexEvent(item, BasicEval.Timestamp, _contextJson),
+                    item => CheckSummaryEvent(item));
+            }
+        }
+
+        [Fact]
+        public void ItDoesNotSummarizeAFeatureEventThatIsExcludedFromSummaries()
+        {
+            var mockSender = MakeMockSender();
+            var captured = EventCapture.From(mockSender);
+
+            using (var ep = MakeProcessor(_config, mockSender))
+            {
+                ep.RecordEvaluationEvent(new EvaluationEvent
+                {
+                    FlagKey =  "the-flag",
+                    Value = LdValue.Of("value"),
+                    Default = LdValue.Of("default"),
+                    SamplingRatio = 0,
+                    ExcludeFromSummaries = true,
+                    Context = _context,
+                    Timestamp = BasicEval.Timestamp
+                });
+                FlushAndWait(ep, captured);
+
+                Assert.Collection(captured.Events,
+                    item => CheckIndexEvent(item, BasicEval.Timestamp, _contextJson));
             }
         }
 
@@ -597,7 +647,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             var mockSender = MakeMockSender();
             var captured = EventCapture.From(mockSender,
                 new EventSenderResult(DeliveryStatus.Failed, null));
-            
+
             using (var ep = MakeProcessor(_config, mockSender))
             {
                 RecordIdentify(ep, _fixedTimestamp, _context);
@@ -750,6 +800,67 @@ namespace LaunchDarkly.Sdk.Internal.Events
             }
         }
 
+        [Fact]
+        public void ItCanQueueAMigrationOpEvent()
+        {
+            var mockSender = MakeMockSender();
+            var captured = EventCapture.From(mockSender);
+
+            using (var ep = MakeProcessor(_config, mockSender))
+            {
+                ep.RecordMigrationOpEvent(new MigrationOpEvent
+                {
+                    Context = _context,
+                    FlagKey = "flag-key",
+                    Value = LdValue.Of("live"),
+                    Default =  LdValue.Of("off"),
+                    SamplingRatio = 1,
+                    Invoked = new MigrationOpEvent.InvokedMeasurement
+                    {
+                        New = true
+                    }
+                });
+                FlushAndWait(ep, captured);
+
+                Assert.Collection(captured.Events, AssertMigrationEvent);
+            }
+        }
+
+        [Fact]
+        public void ItDoesNotQueueAMigrationOpEventWithASamplingRatioOfZero()
+        {
+            var mockSender = MakeMockSender();
+            var captured = EventCapture.From(mockSender);
+
+            using (var ep = MakeProcessor(_config, mockSender))
+            {
+                ep.RecordMigrationOpEvent(new MigrationOpEvent
+                {
+                    Context = _context,
+                    FlagKey = "flag-key",
+                    Value = LdValue.Of("live"),
+                    Default =  LdValue.Of("off"),
+                    SamplingRatio = 0,
+                    Invoked = new MigrationOpEvent.InvokedMeasurement
+                    {
+                        New = true
+                    }
+                });
+
+                Assert.True(ep.FlushAndWait(TimeSpan.Zero));
+                captured.ExpectNoMorePayloads();
+                Assert.Empty(captured.Events);
+            }
+        }
+
+        private void AssertMigrationEvent(LdValue item)
+        {
+            // For most tests we just need to check that there is a migration event.
+            // The output formatting test verify the contents of the events.
+            Assert.Equal("migration_op", item.Get("kind").AsString);
+        }
+
+
         private void CheckIdentifyEvent(LdValue t, UnixMillisecondTime timestamp, LdValue contextJson) =>
             AssertJsonEqual(
                 LdValue.BuildObject().Set("kind", "identify").
@@ -833,7 +944,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         {
             Assert.Equal(LdValue.Of("summary"), t.Get("kind"));
         }
-        
+
         private void CheckSummaryEventDetails(LdValue o, UnixMillisecondTime startDate, UnixMillisecondTime endDate, params Action<LdValue>[] flagChecks)
         {
             CheckSummaryEvent(o);

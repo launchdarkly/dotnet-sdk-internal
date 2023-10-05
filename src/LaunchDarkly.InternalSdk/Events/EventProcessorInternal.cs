@@ -168,7 +168,6 @@ namespace LaunchDarkly.Sdk.Internal.Events
         private readonly Action _testActionOnDiagnosticSend;
         private readonly IEventSender _eventSender;
         private readonly Logger _logger;
-        private readonly Random _random;
         private long _lastKnownPastTime;
         private volatile bool _disabled;
 
@@ -193,7 +192,6 @@ namespace LaunchDarkly.Sdk.Internal.Events
             _flushWorkersCounter = new CountdownEvent(1);
             _eventSender = eventSender;
             _logger = logger;
-            _random = new Random();
 
             EventBuffer buffer = new EventBuffer(config.EventCapacity > 0 ? config.EventCapacity : 1, _diagnosticStore, _logger);
 
@@ -303,11 +301,16 @@ namespace LaunchDarkly.Sdk.Internal.Events
             switch (e)
             {
                 case EvaluationEvent ee:
-                    buffer.AddToSummary(ee); // only evaluation events go into the summarizer
+                    if (!ee.ExcludeFromSummaries)
+                    {
+                        buffer.AddToSummary(ee); // only evaluation events go into the summarizer
+                    }
+
                     timestamp = ee.Timestamp;
                     context = ee.Context;
-                    willAddFullEvent = ee.TrackEvents;
-                    if (ShouldDebugEvent(ee))
+                    var samplingRatio = ee.SamplingRatio ?? 1;
+                    willAddFullEvent = ee.TrackEvents && Sampler.Sample(samplingRatio);
+                    if (ShouldDebugEvent(ee) && Sampler.Sample(samplingRatio))
                     {
                         debugEvent = new DebugEvent { FromEvent = ee };
                     }
@@ -320,6 +323,14 @@ namespace LaunchDarkly.Sdk.Internal.Events
                     timestamp = ce.Timestamp;
                     context = ce.Context;
                     break;
+                case MigrationOpEvent me:
+                    if (Sampler.Sample(me.SamplingRatio))
+                    {
+                        buffer.AddEvent(e);
+                    }
+
+                    // Migration events do not need to generate index events, so we can just return here.
+                    return;
                 default:
                     timestamp = new UnixMillisecondTime();
                     break;

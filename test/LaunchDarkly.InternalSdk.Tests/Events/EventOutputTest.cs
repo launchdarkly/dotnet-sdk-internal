@@ -1,6 +1,5 @@
 ﻿using System;
 using Xunit;
-
 using static LaunchDarkly.Sdk.Internal.Events.EventProcessorInternal;
 using static LaunchDarkly.Sdk.Internal.Events.EventTypes;
 
@@ -20,12 +19,12 @@ namespace LaunchDarkly.Sdk.Internal.Events
             {
                 var f = new EventOutputFormatter(new EventsConfiguration());
 
-                var evalEvent = new EvaluationEvent { FlagKey = "flag", Context = c };
+                var evalEvent = new EvaluationEvent {FlagKey = "flag", Context = c};
                 var outputEvent = SerializeOneEvent(f, evalEvent);
                 Assert.Equal(LdValue.Null, outputEvent.Get("context"));
                 Assert.Equal(LdValue.Parse(keysJson), outputEvent.Get("contextKeys"));
 
-                var customEvent = new CustomEvent { EventKey = "customkey", Context = c };
+                var customEvent = new CustomEvent {EventKey = "customkey", Context = c};
                 outputEvent = SerializeOneEvent(f, customEvent);
                 Assert.Equal(LdValue.Null, outputEvent.Get("context"));
                 Assert.Equal(LdValue.Parse(keysJson), outputEvent.Get("contextKeys"));
@@ -58,7 +57,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 ""creationDate"":100000,
                 ""key"":""flag"",
                 ""version"":11,
-                ""contextKeys"":"+SimpleContextKeysJson+@",
+                ""contextKeys"":" + SimpleContextKeysJson + @",
                 ""value"":""flagvalue"",
                 ""default"":""defaultvalue""
                 }"));
@@ -108,13 +107,13 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 ""default"":""defaultvalue""
                 }"));
 
-            var debugEvent = new DebugEvent { FromEvent = feWithVariation };
+            var debugEvent = new DebugEvent {FromEvent = feWithVariation};
             TestEventSerialization(debugEvent, LdValue.Parse(@"{
                 ""kind"":""debug"",
                 ""creationDate"":100000,
                 ""key"":""flag"",
                 ""version"":11,
-                ""context"":"+SimpleContextJson+@",
+                ""context"":" + SimpleContextJson + @",
                 ""value"":""flagvalue"",
                 ""variation"":1,
                 ""default"":""defaultvalue""
@@ -122,10 +121,34 @@ namespace LaunchDarkly.Sdk.Internal.Events
         }
 
         [Fact]
+        public void ItSerializesTheSamplingRatioForFeatureEventsWhenNotOne()
+        {
+            TestEventSerialization(new EvaluationEvent
+            {
+                Timestamp = _fixedTimestamp,
+                FlagKey = "flag",
+                FlagVersion = 11,
+                Context = SimpleContext,
+                Value = LdValue.Of("flagvalue"),
+                Default = LdValue.Of("defaultvalue"),
+                SamplingRatio = 2
+            }, LdValue.Parse(@"{
+                ""kind"":""feature"",
+                ""creationDate"":100000,
+                ""key"":""flag"",
+                ""version"":11,
+                ""contextKeys"":" + SimpleContextKeysJson + @",
+                ""value"":""flagvalue"",
+                ""default"":""defaultvalue"",
+                ""samplingRatio"": 2
+                }"));
+        }
+
+        [Fact]
         public void IdentifyEventIsSerialized()
         {
             var user = User.Builder("userkey").Name("me").Build();
-            var ie = new IdentifyEvent { Timestamp = _fixedTimestamp, Context = SimpleContext };
+            var ie = new IdentifyEvent {Timestamp = _fixedTimestamp, Context = SimpleContext};
             TestEventSerialization(ie, LdValue.Parse(@"{
                 ""kind"":""identify"",
                 ""creationDate"":100000,
@@ -200,15 +223,18 @@ namespace LaunchDarkly.Sdk.Internal.Events
             summary.IncrementCounter("first", 1, 12, LdValue.Of("value1a"), LdValue.Of("default1"), context1);
 
             summary.IncrementCounter("second", 2, 21, LdValue.Of("value2b"), LdValue.Of("default2"), context2);
-            summary.IncrementCounter("second", null, 21, LdValue.Of("default2"), LdValue.Of("default2"), context2); // flag exists (has version), but eval failed (no variation)
+            summary.IncrementCounter("second", null, 21, LdValue.Of("default2"), LdValue.Of("default2"),
+                context2); // flag exists (has version), but eval failed (no variation)
 
-            summary.IncrementCounter("third", null, null, LdValue.Of("default3"), LdValue.Of("default3"), context2); // flag doesn't exist (no version)
+            summary.IncrementCounter("third", null, null, LdValue.Of("default3"), LdValue.Of("default3"),
+                context2); // flag doesn't exist (no version)
 
             summary.NoteTimestamp(UnixMillisecondTime.OfMillis(1000));
             summary.NoteTimestamp(UnixMillisecondTime.OfMillis(1002));
 
             var f = new EventOutputFormatter(new EventsConfiguration());
-            var outputEvent = TestUtil.TryParseJson(f.SerializeOutputEvents(new object[0], summary, out var count)).Get(0);
+            var outputEvent = TestUtil.TryParseJson(f.SerializeOutputEvents(new object[0], summary, out var count))
+                .Get(0);
             Assert.Equal(1, count);
 
             Assert.Equal("summary", outputEvent.Get("kind").AsString);
@@ -220,7 +246,8 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
             var firstJson = featuresJson.Get("first");
             Assert.Equal("default1", firstJson.Get("default").AsString);
-            Assert.Equal(LdValue.ArrayOf(LdValue.Of("kind1")), firstJson.Get("contextKinds")); // we evaluated this flag with only context1
+            Assert.Equal(LdValue.ArrayOf(LdValue.Of("kind1")),
+                firstJson.Get("contextKinds")); // we evaluated this flag with only context1
             TestUtil.AssertContainsInAnyOrder(firstJson.Get("counters").List,
                 LdValue.Parse(@"{""value"":""value1a"",""variation"":1,""version"":11,""count"":2}"),
                 LdValue.Parse(@"{""value"":""value1a"",""variation"":1,""version"":12,""count"":1}"));
@@ -236,15 +263,504 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
             var thirdJson = featuresJson.Get("third");
             Assert.Equal("default3", thirdJson.Get("default").AsString);
-            Assert.Equal(LdValue.ArrayOf(LdValue.Of("kind2")), thirdJson.Get("contextKinds")); // we evaluated this flag with only context2
+            Assert.Equal(LdValue.ArrayOf(LdValue.Of("kind2")),
+                thirdJson.Get("contextKinds")); // we evaluated this flag with only context2
             TestUtil.AssertContainsInAnyOrder(thirdJson.Get("counters").AsList(LdValue.Convert.Json),
                 LdValue.Parse(@"{""unknown"":true,""value"":""default3"",""count"":1}"));
         }
 
+        [Fact]
+        public void ItSerializesMigrationOpEvents()
+        {
+            var context = Context.New(ContextKind.Of("user"), "userKey");
+            var migrationOpEvent = new MigrationOpEvent
+            {
+                Timestamp = UnixMillisecondTime.OfMillis(100),
+                Context = context,
+                Operation = "read",
+                SamplingRatio = 2,
+                // Evaluation detail
+                FlagKey = "my-migration",
+                FlagVersion = 12,
+                Variation = 2,
+                Value = LdValue.Of("live"),
+                Default = LdValue.Of("off"),
+                Reason = EvaluationReason.FallthroughReason,
+                // Measurements
+                Invoked = new MigrationOpEvent.InvokedMeasurement
+                {
+                    Old = true,
+                    New = true
+                },
+                Latency = new MigrationOpEvent.LatencyMeasurement
+                {
+                    Old = 200,
+                    New = 300
+                },
+                Error = new MigrationOpEvent.ErrorMeasurement
+                {
+                    Old = true,
+                    New = true
+                },
+                Consistent = new MigrationOpEvent.ConsistentMeasurement()
+                {
+                    IsConsistent = true,
+                    SamplingRatio = 3
+                }
+            };
+
+            TestEventSerialization(migrationOpEvent, LdValue.Parse(@"{
+                ""kind"":""migration_op"",
+                ""creationDate"":100,
+                ""samplingRatio"": 2,
+                ""contextKeys"": {""user"":""userKey""},
+                ""operation"": ""read"",
+                ""evaluation"": {
+                    ""key"":""my-migration"",
+                    ""version"":12,
+                    ""value"":""live"",
+                    ""variation"":2,
+                    ""default"":""off"",
+                    ""reason"":{""kind"":""FALLTHROUGH""}
+                },
+                ""measurements"": [
+                    {
+                        ""key"": ""invoked"",
+                        ""values"": {
+                            ""old"": true,
+                            ""new"": true
+                        }
+                    },
+                    {
+                        ""key"": ""error"",
+                        ""values"": {
+                            ""old"": true,
+                            ""new"": true
+                        }
+                    },
+                    {
+                        ""key"": ""latency_ms"",
+                        ""values"": {
+                            ""old"": 200,
+                            ""new"": 300
+                        }
+                    },
+                    {
+                        ""key"": ""consistent"",
+                        ""value"": true,
+                        ""samplingRatio"": 3
+                    }
+                ]
+            }"));
+        }
+
+        [Fact]
+        public void ItCanOmitOptionalMeasurements()
+        {
+            var context = Context.New(ContextKind.Of("user"), "userKey");
+            var migrationOpEvent = new MigrationOpEvent
+            {
+                Timestamp = UnixMillisecondTime.OfMillis(100),
+                Context = context,
+                Operation = "read",
+                SamplingRatio = 2,
+                // Evaluation detail
+                FlagKey = "my-migration",
+                FlagVersion = 12,
+                Variation = 2,
+                Value = LdValue.Of("live"),
+                Default = LdValue.Of("off"),
+                Reason = EvaluationReason.FallthroughReason,
+                // Measurements
+                Invoked = new MigrationOpEvent.InvokedMeasurement
+                {
+                    Old = true,
+                    New = true
+                },
+            };
+
+            TestEventSerialization(migrationOpEvent, LdValue.Parse(@"{
+                ""kind"":""migration_op"",
+                ""creationDate"":100,
+                ""samplingRatio"": 2,
+                ""contextKeys"": {""user"":""userKey""},
+                ""operation"": ""read"",
+                ""evaluation"": {
+                    ""key"":""my-migration"",
+                    ""version"":12,
+                    ""value"":""live"",
+                    ""variation"":2,
+                    ""default"":""off"",
+                    ""reason"":{""kind"":""FALLTHROUGH""}
+                },
+                ""measurements"": [
+                    {
+                        ""key"": ""invoked"",
+                        ""values"": {
+                            ""old"": true,
+                            ""new"": true
+                        }
+                    }
+                ]
+            }"));
+        }
+
+        [Fact]
+        public void ItCanOmitOptionalEvaluationDetailFields()
+        {
+            var context = Context.New(ContextKind.Of("user"), "userKey");
+            var migrationOpEvent = new MigrationOpEvent
+            {
+                Timestamp = UnixMillisecondTime.OfMillis(100),
+                Context = context,
+                Operation = "read",
+                SamplingRatio = 2,
+                // Evaluation detail
+                FlagKey = "my-migration",
+                Value = LdValue.Of("off"),
+                Default = LdValue.Of("off"),
+                // Measurements
+                Invoked = new MigrationOpEvent.InvokedMeasurement
+                {
+                    Old = true,
+                    New = true
+                },
+            };
+
+            TestEventSerialization(migrationOpEvent, LdValue.Parse(@"{
+                ""kind"":""migration_op"",
+                ""creationDate"":100,
+                ""samplingRatio"": 2,
+                ""contextKeys"": {""user"":""userKey""},
+                ""operation"": ""read"",
+                ""evaluation"": {
+                    ""key"":""my-migration"",
+                    ""value"":""off"",
+                    ""default"":""off""
+                },
+                ""measurements"": [
+                    {
+                        ""key"": ""invoked"",
+                        ""values"": {
+                            ""old"": true,
+                            ""new"": true
+                        }
+                    }
+                ]
+            }"));
+        }
+
+        [Fact]
+        public void ItCanHandleOnlyOldInvoked()
+        {
+            var context = Context.New(ContextKind.Of("user"), "userKey");
+            var migrationOpEvent = new MigrationOpEvent
+            {
+                Timestamp = UnixMillisecondTime.OfMillis(100),
+                Context = context,
+                Operation = "read",
+                SamplingRatio = 2,
+                // Evaluation detail
+                FlagKey = "my-migration",
+                Value = LdValue.Of("off"),
+                Default = LdValue.Of("off"),
+                // Measurements
+                Invoked = new MigrationOpEvent.InvokedMeasurement
+                {
+                    Old = true,
+                },
+            };
+
+            TestEventSerialization(migrationOpEvent, LdValue.Parse(@"{
+                ""kind"":""migration_op"",
+                ""creationDate"":100,
+                ""samplingRatio"": 2,
+                ""contextKeys"": {""user"":""userKey""},
+                ""operation"": ""read"",
+                ""evaluation"": {
+                    ""key"":""my-migration"",
+                    ""value"":""off"",
+                    ""default"":""off""
+                },
+                ""measurements"": [
+                    {
+                        ""key"": ""invoked"",
+                        ""values"": {
+                            ""old"": true
+                        }
+                    }
+                ]
+            }"));
+        }
+
+        [Fact]
+        public void ItCanHandleOnlyNewInvoked()
+        {
+            var context = Context.New(ContextKind.Of("user"), "userKey");
+            var migrationOpEvent = new MigrationOpEvent
+            {
+                Timestamp = UnixMillisecondTime.OfMillis(100),
+                Context = context,
+                Operation = "read",
+                SamplingRatio = 2,
+                // Evaluation detail
+                FlagKey = "my-migration",
+                Value = LdValue.Of("off"),
+                Default = LdValue.Of("off"),
+                // Measurements
+                Invoked = new MigrationOpEvent.InvokedMeasurement
+                {
+                    New = true,
+                },
+            };
+
+            TestEventSerialization(migrationOpEvent, LdValue.Parse(@"{
+                ""kind"":""migration_op"",
+                ""creationDate"":100,
+                ""samplingRatio"": 2,
+                ""contextKeys"": {""user"":""userKey""},
+                ""operation"": ""read"",
+                ""evaluation"": {
+                    ""key"":""my-migration"",
+                    ""value"":""off"",
+                    ""default"":""off""
+                },
+                ""measurements"": [
+                    {
+                        ""key"": ""invoked"",
+                        ""values"": {
+                            ""new"": true
+                        }
+                    }
+                ]
+            }"));
+        }
+
+        [Fact]
+        public void ItCanHandleOnlyOldLatency()
+        {
+            var context = Context.New(ContextKind.Of("user"), "userKey");
+            var migrationOpEvent = new MigrationOpEvent
+            {
+                Timestamp = UnixMillisecondTime.OfMillis(100),
+                Context = context,
+                Operation = "read",
+                SamplingRatio = 2,
+                // Evaluation detail
+                FlagKey = "my-migration",
+                Value = LdValue.Of("off"),
+                Default = LdValue.Of("off"),
+                // Measurements
+                Invoked = new MigrationOpEvent.InvokedMeasurement
+                {
+                    New = true,
+                    Old = true
+                },
+                Latency = new MigrationOpEvent.LatencyMeasurement
+                {
+                    Old = 200
+                }
+            };
+
+            TestEventSerialization(migrationOpEvent, LdValue.Parse(@"{
+                ""kind"":""migration_op"",
+                ""creationDate"":100,
+                ""samplingRatio"": 2,
+                ""contextKeys"": {""user"":""userKey""},
+                ""operation"": ""read"",
+                ""evaluation"": {
+                    ""key"":""my-migration"",
+                    ""value"":""off"",
+                    ""default"":""off""
+                },
+                ""measurements"": [
+                    {
+                        ""key"": ""invoked"",
+                        ""values"": {
+                            ""new"": true,
+                            ""old"": true
+                        }
+                    },
+                    {
+                        ""key"": ""latency_ms"",
+                        ""values"": {
+                            ""old"": 200
+                        }
+                    }
+                ]
+            }"));
+        }
+
+        [Fact]
+        public void ItCanHandleOnlyNewLatency()
+        {
+            var context = Context.New(ContextKind.Of("user"), "userKey");
+            var migrationOpEvent = new MigrationOpEvent
+            {
+                Timestamp = UnixMillisecondTime.OfMillis(100),
+                Context = context,
+                Operation = "read",
+                SamplingRatio = 2,
+                // Evaluation detail
+                FlagKey = "my-migration",
+                Value = LdValue.Of("off"),
+                Default = LdValue.Of("off"),
+                // Measurements
+                Invoked = new MigrationOpEvent.InvokedMeasurement
+                {
+                    New = true,
+                    Old = true
+                },
+                Latency = new MigrationOpEvent.LatencyMeasurement
+                {
+                    New = 200
+                }
+            };
+
+            TestEventSerialization(migrationOpEvent, LdValue.Parse(@"{
+                ""kind"":""migration_op"",
+                ""creationDate"":100,
+                ""samplingRatio"": 2,
+                ""contextKeys"": {""user"":""userKey""},
+                ""operation"": ""read"",
+                ""evaluation"": {
+                    ""key"":""my-migration"",
+                    ""value"":""off"",
+                    ""default"":""off""
+                },
+                ""measurements"": [
+                    {
+                        ""key"": ""invoked"",
+                        ""values"": {
+                            ""new"": true,
+                            ""old"": true
+                        }
+                    },
+                    {
+                        ""key"": ""latency_ms"",
+                        ""values"": {
+                            ""new"": 200
+                        }
+                    }
+                ]
+            }"));
+        }
+
+        [Fact]
+        public void ItCanHandleOnlyOldError()
+        {
+            var context = Context.New(ContextKind.Of("user"), "userKey");
+            var migrationOpEvent = new MigrationOpEvent
+            {
+                Timestamp = UnixMillisecondTime.OfMillis(100),
+                Context = context,
+                Operation = "read",
+                SamplingRatio = 2,
+                // Evaluation detail
+                FlagKey = "my-migration",
+                Value = LdValue.Of("off"),
+                Default = LdValue.Of("off"),
+                // Measurements
+                Invoked = new MigrationOpEvent.InvokedMeasurement
+                {
+                    New = true,
+                    Old = true
+                },
+                Error = new MigrationOpEvent.ErrorMeasurement
+                {
+                    Old = true
+                }
+            };
+
+            TestEventSerialization(migrationOpEvent, LdValue.Parse(@"{
+                ""kind"":""migration_op"",
+                ""creationDate"":100,
+                ""samplingRatio"": 2,
+                ""contextKeys"": {""user"":""userKey""},
+                ""operation"": ""read"",
+                ""evaluation"": {
+                    ""key"":""my-migration"",
+                    ""value"":""off"",
+                    ""default"":""off""
+                },
+                ""measurements"": [
+                    {
+                        ""key"": ""invoked"",
+                        ""values"": {
+                            ""new"": true,
+                            ""old"": true
+                        }
+                    },
+                    {
+                        ""key"": ""error"",
+                        ""values"": {
+                            ""old"": true
+                        }
+                    }
+                ]
+            }"));
+        }
+
+        [Fact]
+        public void ItCanHandleOnlyNewError()
+        {
+            var context = Context.New(ContextKind.Of("user"), "userKey");
+            var migrationOpEvent = new MigrationOpEvent
+            {
+                Timestamp = UnixMillisecondTime.OfMillis(100),
+                Context = context,
+                Operation = "read",
+                SamplingRatio = 2,
+                // Evaluation detail
+                FlagKey = "my-migration",
+                Value = LdValue.Of("off"),
+                Default = LdValue.Of("off"),
+                // Measurements
+                Invoked = new MigrationOpEvent.InvokedMeasurement
+                {
+                    New = true,
+                    Old = true
+                },
+                Error = new MigrationOpEvent.ErrorMeasurement
+                {
+                    New = true
+                }
+            };
+
+            TestEventSerialization(migrationOpEvent, LdValue.Parse(@"{
+                ""kind"":""migration_op"",
+                ""creationDate"":100,
+                ""samplingRatio"": 2,
+                ""contextKeys"": {""user"":""userKey""},
+                ""operation"": ""read"",
+                ""evaluation"": {
+                    ""key"":""my-migration"",
+                    ""value"":""off"",
+                    ""default"":""off""
+                },
+                ""measurements"": [
+                    {
+                        ""key"": ""invoked"",
+                        ""values"": {
+                            ""new"": true,
+                            ""old"": true
+                        }
+                    },
+                    {
+                        ""key"": ""error"",
+                        ""values"": {
+                            ""new"": true
+                        }
+                    }
+                ]
+            }"));
+        }
+
+
         private LdValue SerializeOneEvent(EventOutputFormatter f, object e)
         {
             var emptySummary = new EventSummary();
-            var json = f.SerializeOutputEvents(new object[] { e }, emptySummary, out var count);
+            var json = f.SerializeOutputEvents(new object[] {e}, emptySummary, out var count);
             var outputEvent = TestUtil.TryParseJson(json).Get(0);
             Assert.Equal(1, count);
             return outputEvent;
