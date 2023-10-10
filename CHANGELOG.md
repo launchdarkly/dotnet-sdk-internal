@@ -2,6 +2,11 @@
 
 All notable changes to `LaunchDarkly.InternalSdk` will be documented in this file. For full release notes for the projects that depend on this project, see their respective changelogs. This file describes changes only to the common code. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [3.2.0] - 2023-10-10
+### Added:
+- Add common support for technology migrations.
+- HttpProperties now supports WithApplicationTags.
+
 ## [3.1.2] - 2023-04-21
 ### Changed:
 - Updated `LaunchDarkly.CommonSdk` to `6.0.1`.
