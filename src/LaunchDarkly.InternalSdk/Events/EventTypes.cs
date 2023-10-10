@@ -1,5 +1,4 @@
-﻿
-namespace LaunchDarkly.Sdk.Internal.Events
+﻿namespace LaunchDarkly.Sdk.Internal.Events
 {
     /// <summary>
     /// This class contains inner types that are used as parameter types for the EventProcessor
@@ -49,6 +48,11 @@ namespace LaunchDarkly.Sdk.Internal.Events
             public string PrereqOf;
             public bool TrackEvents;
             public UnixMillisecondTime? DebugEventsUntilDate;
+            // This is optional so that the default value can be disambiguated from 0.
+            // Allowing libraries to update to the version where this was introduced without inadvertently
+            // disabling events.
+            public long? SamplingRatio;
+            public bool ExcludeFromSummaries;
         }
 
         /// <summary>
@@ -70,6 +74,65 @@ namespace LaunchDarkly.Sdk.Internal.Events
             public string EventKey;
             public LdValue Data;
             public double? MetricValue;
+        }
+
+        /// <summary>
+        /// Parameters for <see cref="EventProcessor.RecordMigrationOpEvent"/>
+        /// </summary>
+        public struct MigrationOpEvent
+        {
+            #region Measurement Types
+
+            public struct InvokedMeasurement
+            {
+                public bool Old;
+                public bool New;
+            }
+
+            public struct LatencyMeasurement
+            {
+                public long? Old;
+                public long? New;
+            }
+
+            public struct ErrorMeasurement
+            {
+                public bool Old;
+                public bool New;
+            }
+
+            public struct ConsistentMeasurement
+            {
+                public bool IsConsistent;
+                public long SamplingRatio;
+            }
+
+            #endregion
+
+            public UnixMillisecondTime Timestamp;
+            public Context Context;
+            public string Operation;
+            public long SamplingRatio;
+
+            #region Evaluation Detail
+
+            public string FlagKey;
+            public int? FlagVersion;
+            public int? Variation;
+            public LdValue Value;
+            public LdValue Default;
+            public EvaluationReason? Reason;
+
+            #endregion
+
+            #region Measurements
+
+            public InvokedMeasurement Invoked;
+            public LatencyMeasurement? Latency;
+            public ErrorMeasurement? Error;
+            public ConsistentMeasurement? Consistent;
+
+            #endregion
         }
     }
 }
