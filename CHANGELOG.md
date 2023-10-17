@@ -2,6 +2,10 @@
 
 All notable changes to `LaunchDarkly.InternalSdk` will be documented in this file. For full release notes for the projects that depend on this project, see their respective changelogs. This file describes changes only to the common code. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [3.3.1] - 2023-10-17
+### Changed:
+- Updated Dotnet Common to 7.0.0 which contains nullability of IEnvironmentReporter properties.
+
 ## [3.3.0] - 2023-10-10
 ### Changed:
 - Updated LaunchDarkly.CommonSdk to 6.2.0 to incorporate changes.
