@@ -18,7 +18,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             _globalPrivateAttributes = config.PrivateAttributes ?? Enumerable.Empty<AttributeRef>();
         }
 
-        public void Write(in Context c, Utf8JsonWriter w)
+        public void Write(in Context c, Utf8JsonWriter w, bool redactAnonymous = false)
         {
             if (c.Multiple)
             {
@@ -27,17 +27,17 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 foreach (var mc in c.MultiKindContexts)
                 {
                     w.WritePropertyName(mc.Kind.Value);
-                    WriteSingle(mc, w, false);
+                    WriteSingle(mc, w, false, redactAnonymous);
                 }
                 w.WriteEndObject();
             }
             else
             {
-                WriteSingle(c, w, true);
+                WriteSingle(c, w, true, redactAnonymous);
             }
         }
 
-        private void WriteSingle(in Context c, Utf8JsonWriter w, bool includeKind)
+        private void WriteSingle(in Context c, Utf8JsonWriter w, bool includeKind, bool redactAnonymous)
         {
             w.WriteStartObject();
 
@@ -48,11 +48,13 @@ namespace LaunchDarkly.Sdk.Internal.Events
             w.WriteString("key", c.Key);
             JsonConverterHelpers.WriteBooleanIfTrue(w, "anonymous", c.Anonymous);
 
+            var redactAll = _allAttributesPrivate || (redactAnonymous && c.Anonymous);
+
             List<string> redactedList = null;
             var privateRefs = _globalPrivateAttributes.Concat(c.PrivateAttributes);
             foreach (var attr in c.OptionalAttributeNames)
             {
-                if (_allAttributesPrivate)
+                if (redactAll)
                 {
                     AddRedacted(ref redactedList, attr); // the entire attribute is redacted
                     continue;

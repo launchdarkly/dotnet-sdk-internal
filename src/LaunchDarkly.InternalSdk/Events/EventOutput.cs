@@ -100,7 +100,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         private void WriteEvaluationEvent(in EvaluationEvent ee, Utf8JsonWriter obj, bool debug)
         {
             WriteBase(debug ? "debug" : "feature", obj, ee.Timestamp, ee.FlagKey);
-            WriteContext(ee.Context, obj);
+            WriteContext(ee.Context, obj, redactAnonymous: !debug);
 
             if (ee.SamplingRatio.HasValue && ee.SamplingRatio != 1)
             {
@@ -189,10 +189,10 @@ namespace LaunchDarkly.Sdk.Internal.Events
             obj.WriteEndObject();
         }
 
-        private void WriteContext(in Context context, Utf8JsonWriter obj)
+        private void WriteContext(in Context context, Utf8JsonWriter obj, bool redactAnonymous = false)
         {
             obj.WritePropertyName("context");
-            _contextFormatter.Write(context, obj);
+            _contextFormatter.Write(context, obj, redactAnonymous);
         }
 
         private static void WriteReason(EvaluationReason? reason, Utf8JsonWriter obj)
