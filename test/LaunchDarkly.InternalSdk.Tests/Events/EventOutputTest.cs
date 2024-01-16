@@ -13,16 +13,15 @@ namespace LaunchDarkly.Sdk.Internal.Events
         private const string SimpleContextKeysJson = @"{""user"": ""userkey""}";
 
         [Fact]
-        public void ContextKeysAreSetForSingleOrMultiKindContexts()
+        public void ContextOrKeysAreSetForSingleOrMultiKindContexts()
         {
-            Action<Context, string> doTest = (Context c, string keysJson) =>
+            Action<Context, string, string> doTest = (Context c, string keysJson, string contextJson) =>
             {
                 var f = new EventOutputFormatter(new EventsConfiguration());
 
                 var evalEvent = new EvaluationEvent {FlagKey = "flag", Context = c};
                 var outputEvent = SerializeOneEvent(f, evalEvent);
-                Assert.Equal(LdValue.Null, outputEvent.Get("context"));
-                Assert.Equal(LdValue.Parse(keysJson), outputEvent.Get("contextKeys"));
+                Assert.Equal(LdValue.Parse(contextJson), outputEvent.Get("context"));
 
                 var customEvent = new CustomEvent {EventKey = "customkey", Context = c};
                 outputEvent = SerializeOneEvent(f, customEvent);
@@ -31,12 +30,14 @@ namespace LaunchDarkly.Sdk.Internal.Events
             };
 
             var single = Context.New(ContextKind.Of("kind1"), "key1");
-            var singleJson = @"{""kind1"": ""key1""}";
-            doTest(single, singleJson);
+            var singleKeysJson = @"{""kind1"": ""key1""}";
+            var singleContextJson = @"{""kind"":""kind1"",""key"":""key1""}";
+            doTest(single, singleKeysJson, singleContextJson);
 
             var multi = Context.NewMulti(single, Context.New(ContextKind.Of("kind2"), "key2"));
-            var multiJson = @"{""kind1"": ""key1"", ""kind2"": ""key2""}";
-            doTest(multi, multiJson);
+            var multiKeysJson = @"{""kind1"": ""key1"", ""kind2"": ""key2""}";
+            var multiContextJson = @"{""kind"":""multi"",""kind1"":{""key"":""key1""},""kind2"":{""key"":""key2""}}";
+            doTest(multi, multiKeysJson, multiContextJson);
         }
 
         [Fact]
@@ -57,7 +58,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 ""creationDate"":100000,
                 ""key"":""flag"",
                 ""version"":11,
-                ""contextKeys"":" + SimpleContextKeysJson + @",
+                ""context"":" + SimpleContextJson + @",
                 ""value"":""flagvalue"",
                 ""default"":""defaultvalue""
                 }"));
@@ -69,7 +70,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 ""creationDate"":100000,
                 ""key"":""flag"",
                 ""version"":11,
-                ""contextKeys"":" + SimpleContextKeysJson + @",
+                ""context"":" + SimpleContextJson + @",
                 ""value"":""flagvalue"",
                 ""variation"":1,
                 ""default"":""defaultvalue""
@@ -83,7 +84,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 ""creationDate"":100000,
                 ""key"":""flag"",
                 ""version"":11,
-                ""contextKeys"":" + SimpleContextKeysJson + @",
+                ""context"":" + SimpleContextJson + @",
                 ""value"":""flagvalue"",
                 ""variation"":1,
                 ""default"":""defaultvalue"",
@@ -102,7 +103,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 ""kind"":""feature"",
                 ""creationDate"":100000,
                 ""key"":""flag"",
-                ""contextKeys"":" + SimpleContextKeysJson + @",
+                ""context"":" + SimpleContextJson + @",
                 ""value"":""defaultvalue"",
                 ""default"":""defaultvalue""
                 }"));
@@ -137,7 +138,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 ""creationDate"":100000,
                 ""key"":""flag"",
                 ""version"":11,
-                ""contextKeys"":" + SimpleContextKeysJson + @",
+                ""context"":" + SimpleContextJson + @",
                 ""value"":""flagvalue"",
                 ""default"":""defaultvalue"",
                 ""samplingRatio"": 2

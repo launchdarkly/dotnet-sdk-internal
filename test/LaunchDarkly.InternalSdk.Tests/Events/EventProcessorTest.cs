@@ -184,7 +184,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
                 Assert.Collection(captured.Events,
                     item => CheckIndexEvent(item, BasicEval.Timestamp, _contextJson),
-                    item => CheckFeatureEvent(item, BasicFlagWithTracking, BasicEval),
+                    item => CheckFeatureEvent(item, BasicFlagWithTracking, BasicEval, _contextJson),
                     item => CheckSummaryEvent(item));
             }
         }
@@ -261,7 +261,9 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 {
                     captured.Events.Clear();
 
-                    var context = Context.New("user" + (++userCounter));
+                    var userKey = "user" + (++userCounter);
+                    var contextJson = LdValue.Parse("{\"kind\":\"user\",\"key\":\"" + userKey + "\"}");
+                    var context = Context.New(userKey);
                     var eval = BasicEval;
                     eval.Context = context;
                     eval.Reason = reason;
@@ -270,7 +272,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
                     Assert.Collection(captured.Events,
                         item => CheckIndexEvent(item),
-                        item => CheckFeatureEvent(item, BasicFlagWithTracking, eval),
+                        item => CheckFeatureEvent(item, BasicFlagWithTracking, eval, contextJson),
                         item => CheckSummaryEvent(item));
                 }
             }
@@ -311,7 +313,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
                 Assert.Collection(captured.Events,
                     item => CheckIndexEvent(item, BasicEval.Timestamp, _contextJson),
-                    item => CheckFeatureEvent(item, flag, BasicEval),
+                    item => CheckFeatureEvent(item, flag, BasicEval, _contextJson),
                     item => CheckDebugEvent(item, flag, BasicEval, _contextJson),
                     item => CheckSummaryEvent(item));
             }
@@ -398,8 +400,8 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
                 Assert.Collection(captured.Events,
                     item => CheckIndexEvent(item, BasicEval.Timestamp, _contextJson),
-                    item => CheckFeatureEvent(item, flag1, BasicEval),
-                    item => CheckFeatureEvent(item, flag2, BasicEval),
+                    item => CheckFeatureEvent(item, flag1, BasicEval, _contextJson),
+                    item => CheckFeatureEvent(item, flag2, BasicEval, _contextJson),
                     item => CheckSummaryEvent(item));
             }
         }
@@ -880,9 +882,9 @@ namespace LaunchDarkly.Sdk.Internal.Events
                     Set("context", contextJson).Build().ToJsonString(),
                 t.ToJsonString());
 
-        private void CheckFeatureEvent(LdValue t, TestFlagProperties f, TestEvalProperties e)
+        private void CheckFeatureEvent(LdValue t, TestFlagProperties f, TestEvalProperties e, LdValue userJson)
         {
-            CheckFeatureOrDebugEvent("feature", t, f, e, LdValue.Null);
+            CheckFeatureOrDebugEvent("feature", t, f, e, userJson);
         }
 
         private void CheckDebugEvent(LdValue t, TestFlagProperties f, TestEvalProperties e,

@@ -100,15 +100,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
         private void WriteEvaluationEvent(in EvaluationEvent ee, Utf8JsonWriter obj, bool debug)
         {
             WriteBase(debug ? "debug" : "feature", obj, ee.Timestamp, ee.FlagKey);
-
-            if (debug)
-            {
-                WriteContext(ee.Context, obj);
-            }
-            else
-            {
-                WriteContextKeys(ee.Context, obj);
-            }
+            WriteContext(ee.Context, obj);
 
             if (ee.SamplingRatio.HasValue && ee.SamplingRatio != 1)
             {
