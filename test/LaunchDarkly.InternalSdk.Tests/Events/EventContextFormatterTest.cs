@@ -140,6 +140,54 @@ namespace LaunchDarkly.Sdk.Internal.Events
             AssertJsonEqual(p.json, ValueWithRedactedAttributesSorted(parsedJson).ToJsonString());
         }
 
+        [Fact]
+        public void TestSingleKindAnonymousContextsAreRedactedAppropriately()
+        {
+            var context = Context.Builder("my-key").Kind("org").
+                Anonymous(true).
+                Name("my-name").
+                Set("attr1", "value1").
+                Build();
+
+            var stream = new MemoryStream();
+            var w = new Utf8JsonWriter(stream);
+            new EventContextFormatter(new EventsConfiguration()).Write(context, w, redactAnonymous: true);
+            w.Flush();
+            var json = Encoding.UTF8.GetString(stream.ToArray());
+
+            var expectedJson = @"{""kind"": ""org"", ""key"": ""my-key"", ""anonymous"": true, ""_meta"": { ""redactedAttributes"": [""attr1"", ""name""]}}";
+
+            LdValue parsedJson = TestUtil.TryParseJson(json);
+            AssertJsonEqual(expectedJson, ValueWithRedactedAttributesSorted(parsedJson).ToJsonString());
+        }
+
+        [Fact]
+        public void TestMultiKindAnonymousContextsAreRedactedAppropriately()
+        {
+            var userContext = Context.Builder("user-key").Kind("user").
+                Anonymous(true).
+                Name("Example user name").
+                Set("attr1", "value1").
+                Build();
+            var orgContext = Context.Builder("org-key").Kind("org").
+                Anonymous(false).
+                Name("Example org name").
+                Set("attr1", "value1").
+                Build();
+            var multi = Context.NewMulti(userContext, orgContext);
+
+            var stream = new MemoryStream();
+            var w = new Utf8JsonWriter(stream);
+            new EventContextFormatter(new EventsConfiguration()).Write(multi, w, redactAnonymous: true);
+            w.Flush();
+            var json = Encoding.UTF8.GetString(stream.ToArray());
+
+            var expectedJson = @"{""kind"": ""multi"", ""org"": {""key"": ""org-key"", ""name"": ""Example org name"", ""attr1"": ""value1""}, ""user"": {""key"": ""user-key"", ""anonymous"": true, ""_meta"": { ""redactedAttributes"": [""attr1"", ""name""]}}}";
+
+            LdValue parsedJson = TestUtil.TryParseJson(json);
+            AssertJsonEqual(expectedJson, ValueWithRedactedAttributesSorted(parsedJson).ToJsonString());
+        }
+
         private static string JsonWithRedactedAttributesSorted(string input) =>
             ValueWithRedactedAttributesSorted(LdValue.Parse(input)).ToJsonString();
 
