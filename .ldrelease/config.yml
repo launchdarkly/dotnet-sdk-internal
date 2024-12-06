@@ -1,9 +1,5 @@
 version: 2
 
-repo:
-  public: dotnet-sdk-internal
-  private: dotnet-sdk-internal-private
-
 publications:
   - url: https://nuget.org/packages/LaunchDarkly.InternalSdk
     description: NuGet
