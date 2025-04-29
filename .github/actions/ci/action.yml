@@ -1,0 +1,36 @@
+name: Shared CI Workflow
+
+inputs:
+  framework_target:
+    description: '.NET build target to use.'
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - run: dotnet --version
+      shell: bash
+
+    - name: Install Dependencies
+      shell: bash
+      run: dotnet restore
+
+    - name: Build
+      id: build
+      shell: bash
+      run: dotnet build src/LaunchDarkly.InternalSdk -f ${{ inputs.framework_target }}
+
+    - name: Run Tests
+      if: steps.build.outcome == 'success'
+      shell: bash
+      run: |
+        dotnet test \
+        -l "junit;LogFilePath=./circle-reports/unit-tests.xml" \
+        -f ${{ inputs.framework_target }} \
+        test/LaunchDarkly.InternalSdk.Tests/LaunchDarkly.InternalSdk.Tests.csproj
+
+    - name: Store Test Results
+      uses: actions/upload-artifact@v4
+      with:
+        name: test_results_${{ inputs.framework_target }}
+        path: ./test/LaunchDarkly.InternalSdk.Tests/circle-reports/*
