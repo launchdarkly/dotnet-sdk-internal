@@ -494,7 +494,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
                 Assert.Collection(captured.Events,
                     item => CheckIndexEvent(item, ce.Timestamp, _contextJson),
-                    item => CheckCustomEvent(item, ce));
+                    item => CheckCustomEvent(item, ce, _contextJson));
             }
         }
 
@@ -663,7 +663,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 FlushAndWait(ep, captured);
 
                 Assert.Collection(captured.Events,
-                    item => CheckCustomEvent(item, BasicCustom));
+                    item => CheckCustomEvent(item, BasicCustom, _contextJson));
             }
         }
 
@@ -902,46 +902,21 @@ namespace LaunchDarkly.Sdk.Internal.Events
             Assert.Equal(LdValue.Of(f.Version), t.Get("version"));
             Assert.Equal(e.Variation.HasValue ? LdValue.Of(e.Variation.Value) : LdValue.Null, t.Get("variation"));
             Assert.Equal(e.Value, t.Get("value"));
-            CheckEventContextOrKeys(t, e.Context, userJson);
+            Assert.Equal(userJson, t.Get("context"));
             Assert.Equal(e.Reason.HasValue ?
                 LdValue.Parse(LdJsonSerialization.SerializeObject(e.Reason.Value)) : LdValue.Null,
                 t.Get("reason"));
         }
 
-        private void CheckCustomEvent(LdValue t, TestCustomEventProperties e)
+        private void CheckCustomEvent(LdValue t, TestCustomEventProperties e, LdValue contextJson)
         {
             Assert.Equal(LdValue.Of("custom"), t.Get("kind"));
             Assert.Equal(LdValue.Of(e.Key), t.Get("key"));
             Assert.Equal(e.Data, t.Get("data"));
-            CheckEventContextOrKeys(t, e.Context, LdValue.Null);
+            Assert.Equal(contextJson, t.Get("context"));
             Assert.Equal(e.MetricValue.HasValue ? LdValue.Of(e.MetricValue.Value) : LdValue.Null, t.Get("metricValue"));
         }
 
-        private void CheckEventContextOrKeys(LdValue o, Context context, LdValue userJson)
-        {
-            if (!userJson.IsNull)
-            {
-                Assert.Equal(userJson, o.Get("context"));
-                Assert.Equal(LdValue.Null, o.Get("contextKeys"));
-            }
-            else
-            {
-                Assert.Equal(LdValue.Null, o.Get("context"));
-                var keysObj = LdValue.BuildObject();
-                if (context.Multiple)
-                {
-                    foreach (var mc in context.MultiKindContexts)
-                    {
-                        keysObj.Add(mc.Kind.Value, mc.Key);
-                    }
-                }
-                else
-                {
-                    keysObj.Add(context.Kind.Value, context.Key);
-                }
-                Assert.Equal(keysObj.Build(), o.Get("contextKeys"));
-            }
-        }
         private void CheckSummaryEvent(LdValue t)
         {
             Assert.Equal(LdValue.Of("summary"), t.Get("kind"));
