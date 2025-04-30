@@ -1,0 +1,55 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [main, feat/**]
+    paths-ignore:
+      - '**.md' #Do not need to run CI for markdown changes.
+  pull_request:
+    branches: [main, feat/**]
+    paths-ignore:
+      - '**.md'
+
+jobs:
+  build-test-netcore:
+    strategy:
+      matrix:
+        framework:
+          - { target: 'netcoreapp3.1', image: 'sdk:3.1-focal' }
+          - { target: 'net6.0', image: 'sdk:6.0-focal' }
+    runs-on: ubuntu-latest
+    container: mcr.microsoft.com/dotnet/${{ matrix.framework.image }}
+    env:
+      ASPNETCORE_SUPPRESSSTATUSMESSAGES: true
+      BUILDFRAMEWORKS: ${{ matrix.framework.target }}
+      TESTFRAMEWORK: ${{ matrix.framework.target }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Shared CI Steps
+        uses: ./.github/actions/ci
+        with:
+          framework_target: ${{ matrix.framework.target }}
+
+  build-test-netframework:
+    strategy:
+      matrix:
+        framework_target: [net462]
+    runs-on: windows-latest
+    env:
+      ASPNETCORE_SUPPRESSSTATUSMESSAGES: true
+      BUILDFRAMEWORKS: ${{ matrix.framework_target }}
+      TESTFRAMEWORK: ${{ matrix.framework_target }}
+    steps:
+      - uses: actions/checkout@v3
+
+      # This is done to prevent `dotnet build` from including commit hashes
+      # in assembly version numbers which results in a test failure.
+      - name: Remove .git directory
+        shell: bash
+        run: rm -rf ./.git
+
+      - name: Shared CI Steps
+        uses: ./.github/actions/ci
+        with:
+          framework_target: ${{ matrix.framework_target }}
