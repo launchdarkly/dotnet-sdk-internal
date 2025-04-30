@@ -10,35 +10,6 @@ namespace LaunchDarkly.Sdk.Internal.Events
         private static readonly UnixMillisecondTime _fixedTimestamp = UnixMillisecondTime.OfMillis(100000);
         private static readonly Context SimpleContext = Context.Builder("userkey").Name("me").Build();
         private const string SimpleContextJson = @"{""kind"": ""user"", ""key"":""userkey"", ""name"": ""me""}";
-        private const string SimpleContextKeysJson = @"{""user"": ""userkey""}";
-
-        [Fact]
-        public void ContextOrKeysAreSetForSingleOrMultiKindContexts()
-        {
-            Action<Context, string, string> doTest = (Context c, string keysJson, string contextJson) =>
-            {
-                var f = new EventOutputFormatter(new EventsConfiguration());
-
-                var evalEvent = new EvaluationEvent {FlagKey = "flag", Context = c};
-                var outputEvent = SerializeOneEvent(f, evalEvent);
-                Assert.Equal(LdValue.Parse(contextJson), outputEvent.Get("context"));
-
-                var customEvent = new CustomEvent {EventKey = "customkey", Context = c};
-                outputEvent = SerializeOneEvent(f, customEvent);
-                Assert.Equal(LdValue.Null, outputEvent.Get("context"));
-                Assert.Equal(LdValue.Parse(keysJson), outputEvent.Get("contextKeys"));
-            };
-
-            var single = Context.New(ContextKind.Of("kind1"), "key1");
-            var singleKeysJson = @"{""kind1"": ""key1""}";
-            var singleContextJson = @"{""kind"":""kind1"",""key"":""key1""}";
-            doTest(single, singleKeysJson, singleContextJson);
-
-            var multi = Context.NewMulti(single, Context.New(ContextKind.Of("kind2"), "key2"));
-            var multiKeysJson = @"{""kind1"": ""key1"", ""kind2"": ""key2""}";
-            var multiContextJson = @"{""kind"":""multi"",""kind1"":{""key"":""key1""},""kind2"":{""key"":""key2""}}";
-            doTest(multi, multiKeysJson, multiContextJson);
-        }
 
         [Fact]
         public void EvaluationEventIsSerialized()
@@ -171,7 +142,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 ""kind"":""custom"",
                 ""creationDate"":100000,
                 ""key"":""customkey"",
-                ""contextKeys"":" + SimpleContextKeysJson + @"
+                ""context"":" + SimpleContextJson + @"
                 }"));
 
             var ceWithData = MakeBasicEvent();
@@ -180,7 +151,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 ""kind"":""custom"",
                 ""creationDate"":100000,
                 ""key"":""customkey"",
-                ""contextKeys"":" + SimpleContextKeysJson + @",
+                ""context"":" + SimpleContextJson + @",
                 ""data"":""thing""
                 }"));
 
@@ -190,7 +161,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 ""kind"":""custom"",
                 ""creationDate"":100000,
                 ""key"":""customkey"",
-                ""contextKeys"":" + SimpleContextKeysJson + @",
+                ""context"":" + SimpleContextJson + @",
                 ""metricValue"":2.5
                 }"));
 
@@ -201,7 +172,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 ""kind"":""custom"",
                 ""creationDate"":100000,
                 ""key"":""customkey"",
-                ""contextKeys"":" + SimpleContextKeysJson + @",
+                ""context"":" + SimpleContextJson + @",
                 ""data"":""thing"",
                 ""metricValue"":2.5
                 }"));
@@ -314,7 +285,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 ""kind"":""migration_op"",
                 ""creationDate"":100,
                 ""samplingRatio"": 2,
-                ""contextKeys"": {""user"":""userKey""},
+                ""context"": {""kind"":""user"", ""key"":""userKey""},
                 ""operation"": ""read"",
                 ""evaluation"": {
                     ""key"":""my-migration"",
@@ -384,7 +355,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 ""kind"":""migration_op"",
                 ""creationDate"":100,
                 ""samplingRatio"": 2,
-                ""contextKeys"": {""user"":""userKey""},
+                ""context"": {""kind"":""user"", ""key"":""userKey""},
                 ""operation"": ""read"",
                 ""evaluation"": {
                     ""key"":""my-migration"",
@@ -432,7 +403,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 ""kind"":""migration_op"",
                 ""creationDate"":100,
                 ""samplingRatio"": 2,
-                ""contextKeys"": {""user"":""userKey""},
+                ""context"": {""kind"":""user"", ""key"":""userKey""},
                 ""operation"": ""read"",
                 ""evaluation"": {
                     ""key"":""my-migration"",
@@ -476,7 +447,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 ""kind"":""migration_op"",
                 ""creationDate"":100,
                 ""samplingRatio"": 2,
-                ""contextKeys"": {""user"":""userKey""},
+                ""context"": {""kind"":""user"", ""key"":""userKey""},
                 ""operation"": ""read"",
                 ""evaluation"": {
                     ""key"":""my-migration"",
@@ -519,7 +490,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 ""kind"":""migration_op"",
                 ""creationDate"":100,
                 ""samplingRatio"": 2,
-                ""contextKeys"": {""user"":""userKey""},
+                ""context"": {""kind"":""user"", ""key"":""userKey""},
                 ""operation"": ""read"",
                 ""evaluation"": {
                     ""key"":""my-migration"",
@@ -567,7 +538,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 ""kind"":""migration_op"",
                 ""creationDate"":100,
                 ""samplingRatio"": 2,
-                ""contextKeys"": {""user"":""userKey""},
+                ""context"": {""kind"":""user"", ""key"":""userKey""},
                 ""operation"": ""read"",
                 ""evaluation"": {
                     ""key"":""my-migration"",
@@ -622,7 +593,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 ""kind"":""migration_op"",
                 ""creationDate"":100,
                 ""samplingRatio"": 2,
-                ""contextKeys"": {""user"":""userKey""},
+                ""context"": {""kind"":""user"", ""key"":""userKey""},
                 ""operation"": ""read"",
                 ""evaluation"": {
                     ""key"":""my-migration"",
@@ -677,7 +648,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 ""kind"":""migration_op"",
                 ""creationDate"":100,
                 ""samplingRatio"": 2,
-                ""contextKeys"": {""user"":""userKey""},
+                ""context"": {""kind"":""user"", ""key"":""userKey""},
                 ""operation"": ""read"",
                 ""evaluation"": {
                     ""key"":""my-migration"",
@@ -732,7 +703,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 ""kind"":""migration_op"",
                 ""creationDate"":100,
                 ""samplingRatio"": 2,
-                ""contextKeys"": {""user"":""userKey""},
+                ""context"": {""kind"":""user"", ""key"":""userKey""},
                 ""operation"": ""read"",
                 ""evaluation"": {
                     ""key"":""my-migration"",
