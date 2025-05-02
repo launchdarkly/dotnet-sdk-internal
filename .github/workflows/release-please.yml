@@ -1,0 +1,64 @@
+name: Release Please
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  release-please:
+    runs-on: ubuntu-22.04
+
+    outputs:
+      dotnet-sdk-internal-released: ${{ steps.release.outputs.release_created }}
+      dotnet-sdk-internal-tag_name: ${{ steps.release.outputs.tag_name }}
+
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          target-branch: ${{ github.ref_name }}
+
+  release-sdk-internal:
+    runs-on: ubuntu-22.04
+    needs: release-please
+    permissions:
+      id-token: write
+      contents: write
+      pull-requests: write
+      issues: write
+    if: ${{ needs.release-please.outputs.dotnet-sdk-internal-released == 'true'}}
+    outputs:
+      hashes: ${{ steps.full-release.outputs.hashes }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Env from project's Env file
+        shell: bash
+        run: echo "$(cat src/LaunchDarkly.InternalSdk/github_actions.env)" >> $GITHUB_ENV
+
+      - uses: ./.github/actions/full-release
+        id: full-release
+        with:
+          workspace_path: ${{ env.WORKSPACE_PATH }}
+          project_file: ${{ env.PROJECT_FILE }}
+          build_output_path: ${{ env.BUILD_OUTPUT_PATH }}
+          test_project_file: ${{ env.TEST_PROJECT_FILE }}
+          dll_name: ${{ env.BUILD_OUTPUT_DLL_NAME }}
+          dry_run: false
+          aws_role: ${{ vars.AWS_ROLE_ARN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  release-sdk-internal-provenance:
+    needs: ['release-please', 'release-sdk-internal']
+    permissions:
+      actions: read
+      id-token: write
+      contents: write
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
+    with:
+      base64-subjects: "${{ needs.release-sdk-internal.outputs.hashes }}"
+      upload-assets: true
+      upload-tag-name: ${{ needs.release-please.outputs.dotnet-sdk-internal-tag_name }}
+      provenance-name: ${{ format('LaunchDarkly.InternalSDK-{0}_provenance.intoto.jsonl', needs.release-please.outputs.dotnet-sdk-internal-tag_name) }}
