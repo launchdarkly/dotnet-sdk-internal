@@ -1,0 +1,81 @@
+name: Build, Test, and Publish
+description: 'Execute the full release process for a workspace.'
+inputs:
+  workspace_path:
+    description: 'Path to the workspace being released.'
+    required: true
+  project_file:
+    description: 'Path to the project file.'
+    required: true
+  test_project_file:
+    description: 'Path to the test project file.  If provided, run unit tests, otherwise skip them.'
+    required: false
+  build_output_path:
+    description: 'Build output path.'
+    required: true
+  dll_name:
+    description: 'Build output dll name.'
+    required: true
+  dry_run:
+    description: 'Is this a dry run. If so no package will be published.'
+    required: true
+  aws_role:
+    description: 'The AWS role to assume, needed to fetch release secrets.'
+    required: true
+  token:
+    description: 'The GitHub token to use for publishing documentation.'
+    required: true
+outputs:
+  hashes:
+    description: sha256sum hashes of built artifacts
+    value: ${{ steps.publish.outputs.hashes }}
+
+runs:
+  using: composite
+  steps:
+    - name: CI check
+      uses: ./.github/actions/ci
+      with:
+        framework_target: "net6.0"
+
+    - uses: launchdarkly/gh-actions/actions/release-secrets@release-secrets-v1.2.0
+      name: Get secrets
+      with:
+        aws_assume_role: ${{ inputs.aws_role }}
+        ssm_parameter_pairs: '/production/common/releasing/digicert/host = DIGICERT_HOST,
+        /production/common/releasing/digicert/api_key = DIGICERT_API_KEY,
+        /production/common/releasing/digicert/client_cert_file_b64 = DIGICERT_CLIENT_CERT_FILE_B64,
+        /production/common/releasing/digicert/client_cert_password = DIGICERT_CLIENT_CERT_PASSWORD,
+        /production/common/releasing/digicert/code_signing_cert_sha1_hash = DIGICERT_CODE_SIGNING_CERT_SHA1_HASH,
+        /production/common/releasing/nuget/api_key = NUGET_API_KEY'
+        s3_path_pairs: 'launchdarkly-releaser/dotnet/LaunchDarkly.snk = LaunchDarkly.snk'
+
+    - name: Release build
+      uses: ./.github/actions/build-release
+      with:
+        project_file: ${{ inputs.project_file }}
+
+    - name: Sign DLLs
+      uses: launchdarkly/gh-actions/actions/sign-dlls@sign-dlls-v1.0.0
+      with:
+        build_configuration_path: ${{ inputs.build_output_path }}
+        dll_name: ${{ inputs.dll_name }}
+
+    - name: Publish Nupkg
+      id: publish
+      uses: ./.github/actions/publish-package
+      with:
+        project_file: ${{ inputs.project_file }}
+        dry_run: ${{ inputs.dry_run }}
+
+    - name: Build Documentation
+      uses: ./.github/actions/build-docs
+      with:
+        workspace_path: ${{ inputs.workspace_path }}
+
+    - name: Publish Documentation
+      if: ${{ inputs.dry_run == 'false' }}
+      uses: ./.github/actions/publish-docs
+      with:
+        workspace_path: ${{ inputs.workspace_path }}
+        token: ${{ inputs.token }}

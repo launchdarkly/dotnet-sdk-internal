@@ -1,0 +1,56 @@
+name: Publish Package
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Is this a dry run. If so no package will be published.'
+        type: boolean
+        required: true
+      generate_provenance:
+        description: 'Whether or not to generate provenance for this publish. Default behavior: generate only on main branch.'
+        type: choice
+        options:
+          - Default
+          - Generate
+          - Do not generate
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    permissions:
+      id-token: write
+      contents: write
+    outputs:
+      full-release-hashes: ${{ steps.full-release.outputs.hashes }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Env from project's Env file
+        shell: bash
+        run: echo "$(cat src/LaunchDarkly.InternalSdk/github_actions.env)" >> $GITHUB_ENV
+
+      - uses: ./.github/actions/full-release
+        id: full-release
+        with:
+          workspace_path: ${{ env.WORKSPACE_PATH }}
+          project_file: ${{ env.PROJECT_FILE }}
+          build_output_path: ${{ env.BUILD_OUTPUT_PATH }}
+          test_project_file: ${{ env.TEST_PROJECT_FILE }}
+          dll_name: ${{ env.BUILD_OUTPUT_DLL_NAME }}
+          dry_run: ${{ inputs.dry_run }}
+          aws_role: ${{ vars.AWS_ROLE_ARN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  release-provenance:
+    needs: ['build']
+    permissions:
+      actions: read
+      id-token: write
+      contents: write
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
+    if: |
+      (inputs.generate_provenance == 'Generate' || (inputs.generate_provenance == 'Default' && github.ref_name == 'main'))
+    with:
+      base64-subjects: "${{ needs.build.outputs.full-release-hashes }}"
+      upload-assets: true
+      provenance-name: src/LaunchDarkly.InternalSdk_provenance.intoto.jsonl
