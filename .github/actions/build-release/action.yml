@@ -1,5 +1,5 @@
 name: Build Action
-description: 'Dotnet Server SDK Build action.'
+description: 'Dotnet Internal SDK Build action.'
 inputs:
   project_file:
     description: 'Path to the project file.'

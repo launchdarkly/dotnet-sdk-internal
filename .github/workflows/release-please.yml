@@ -27,6 +27,7 @@ jobs:
       id-token: write
       contents: write
       pull-requests: write
+      issues: write
     if: ${{ needs.release-please.outputs.dotnet-sdk-internal-released == 'true'}}
     outputs:
       hashes: ${{ steps.full-release.outputs.hashes }}
