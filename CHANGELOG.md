@@ -2,6 +2,13 @@
 
 All notable changes to `LaunchDarkly.InternalSdk` will be documented in this file. For full release notes for the projects that depend on this project, see their respective changelogs. This file describes changes only to the common code. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [3.5.0](https://github.com/launchdarkly/dotnet-sdk-internal/compare/3.4.0...3.5.0) (2025-05-02)
+
+
+### Features
+
+* Inline context for custom and migrations op events ([#34](https://github.com/launchdarkly/dotnet-sdk-internal/issues/34)) ([7013bbe](https://github.com/launchdarkly/dotnet-sdk-internal/commit/7013bbe95b3be44ca277f311a84e195e1adfd41d))
+
 ## [3.4.0] - 2024-03-13
 ### Changed:
 - Redact anonymous attributes within feature events
