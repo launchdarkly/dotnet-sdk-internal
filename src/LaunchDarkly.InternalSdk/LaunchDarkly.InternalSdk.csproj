@@ -27,10 +27,13 @@
     <RepositoryBranch>main</RepositoryBranch>
   </PropertyGroup>
 
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0' or '$(TargetFramework)' == 'net462' or '$(TargetFramework)' == 'netcoreapp3.1'">
+    <PackageReference Include="System.Collections.Immutable" Version="1.7.1" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="LaunchDarkly.CommonSdk" Version="7.0.0" />
     <PackageReference Include="LaunchDarkly.Logging" Version="[2.0.0,3.0.0)" />
-    <PackageReference Include="System.Collections.Immutable" Version="1.7.1" />
   </ItemGroup>
 
   <ItemGroup Condition=" '$(TargetFramework)' == 'net462' ">
