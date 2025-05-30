@@ -2,6 +2,13 @@
 
 All notable changes to `LaunchDarkly.InternalSdk` will be documented in this file. For full release notes for the projects that depend on this project, see their respective changelogs. This file describes changes only to the common code. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [3.5.1](https://github.com/launchdarkly/dotnet-sdk-internal/compare/3.5.0...3.5.1) (2025-05-30)
+
+
+### Bug Fixes
+
+* conditionalize immutable dependency ([#40](https://github.com/launchdarkly/dotnet-sdk-internal/issues/40)) ([3ab529d](https://github.com/launchdarkly/dotnet-sdk-internal/commit/3ab529d730fcbcc0fd5614d96997929b2e4644e1))
+
 ## [3.5.0](https://github.com/launchdarkly/dotnet-sdk-internal/compare/3.4.0...3.5.0) (2025-05-02)
 
 
