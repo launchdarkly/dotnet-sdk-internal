@@ -187,16 +187,27 @@ namespace LaunchDarkly.Sdk.Internal.Http
             return WithHeader("X-LaunchDarkly-Tags", headerValue);
         }
 
-        public HttpProperties WithHeader(string name, string value) =>
-            new HttpProperties(
-                BaseHeaders.Where(kv => !string.Equals(kv.Key, name, StringComparison.OrdinalIgnoreCase))
-                    .Concat(ImmutableList.Create(new KeyValuePair<string, string>(name, value))).ToImmutableList(),
-                ConnectTimeout,
-                HttpExceptionConverter,
-                HttpMessageHandlerFactory,
-                Proxy,
-                ReadTimeout
-            );
+        public HttpProperties WithHeader(string name, string value)
+        {
+            // Avoiding IEnumberable as it fails to properly optimize for ARM64
+            var headers = new List<KeyValuePair<string, string>> { new KeyValuePair<string, string>(name, value) };
+            foreach (var header in BaseHeaders)
+            {
+                if (!string.Equals(header.Key, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    headers.Add(header);
+                }
+            }
+
+            return new HttpProperties(
+                    headers.ToImmutableList(),
+                    ConnectTimeout,
+                    HttpExceptionConverter,
+                    HttpMessageHandlerFactory,
+                    Proxy,
+                    ReadTimeout
+                );
+        }
 
         /// <summary>
         /// Adds BaseHeaders to a request.
