@@ -190,7 +190,7 @@ namespace LaunchDarkly.Sdk.Internal.Http
         public HttpProperties WithHeader(string name, string value)
         {
             // Avoiding IEnumberable as it fails to properly optimize for ARM64
-            var headers = new List<KeyValuePair<string, string>> { new KeyValuePair<string, string>(name, value) };
+            var headers = new List<KeyValuePair<string, string>>();
             foreach (var header in BaseHeaders)
             {
                 if (!string.Equals(header.Key, name, StringComparison.OrdinalIgnoreCase))
@@ -198,6 +198,7 @@ namespace LaunchDarkly.Sdk.Internal.Http
                     headers.Add(header);
                 }
             }
+            headers.Add(new KeyValuePair<string, string>(name, value));
 
             return new HttpProperties(
                     headers.ToImmutableList(),
