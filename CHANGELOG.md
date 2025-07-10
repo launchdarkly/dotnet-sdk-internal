@@ -2,6 +2,13 @@
 
 All notable changes to `LaunchDarkly.InternalSdk` will be documented in this file. For full release notes for the projects that depend on this project, see their respective changelogs. This file describes changes only to the common code. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [3.5.2](https://github.com/launchdarkly/dotnet-sdk-internal/compare/3.5.1...3.5.2) (2025-06-24)
+
+
+### Bug Fixes
+
+* Address ARM64 optimization throwing exceptions ([#42](https://github.com/launchdarkly/dotnet-sdk-internal/issues/42)) ([bac4833](https://github.com/launchdarkly/dotnet-sdk-internal/commit/bac4833a526b9f63025a0c864ce41514e402718c))
+
 ## [3.5.1](https://github.com/launchdarkly/dotnet-sdk-internal/compare/3.5.0...3.5.1) (2025-05-30)
 
 
