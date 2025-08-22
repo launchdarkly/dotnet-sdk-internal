@@ -2,6 +2,13 @@
 
 All notable changes to `LaunchDarkly.InternalSdk` will be documented in this file. For full release notes for the projects that depend on this project, see their respective changelogs. This file describes changes only to the common code. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [3.5.4](https://github.com/launchdarkly/dotnet-sdk-internal/compare/3.5.3...3.5.4) (2025-08-22)
+
+
+### Bug Fixes
+
+* Prevent invalid strings from being part of format value ([#46](https://github.com/launchdarkly/dotnet-sdk-internal/issues/46)) ([b4c772e](https://github.com/launchdarkly/dotnet-sdk-internal/commit/b4c772e059a1f67c8c94c5c39dbb44ca31c2850e))
+
 ## [3.5.3](https://github.com/launchdarkly/dotnet-sdk-internal/compare/3.5.2...3.5.3) (2025-07-10)
 
 
