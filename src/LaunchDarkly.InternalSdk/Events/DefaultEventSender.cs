@@ -148,7 +148,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                     string nextStepDesc = canRetry ?
                         (attempt == MaxAttempts - 1 ? "will not retry" : "will retry after one second") :
                         "giving up permanently";
-                    _logger.Warn(errorMessage + " sending {0}; {1}", description, nextStepDesc);
+                    _logger.Warn("{0} sending {1}; {2}", errorMessage, description, nextStepDesc);
                     if (mustShutDown)
                     {
                         return new EventSenderResult(DeliveryStatus.FailedAndMustShutDown, null);
