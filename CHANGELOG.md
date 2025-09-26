@@ -2,6 +2,13 @@
 
 All notable changes to `LaunchDarkly.InternalSdk` will be documented in this file. For full release notes for the projects that depend on this project, see their respective changelogs. This file describes changes only to the common code. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [3.5.5](https://github.com/launchdarkly/dotnet-sdk-internal/compare/3.5.4...3.5.5) (2025-09-26)
+
+
+### Bug Fixes
+
+* Update CommonSdk to 7.1.1 ([#50](https://github.com/launchdarkly/dotnet-sdk-internal/issues/50)) ([b8d57d3](https://github.com/launchdarkly/dotnet-sdk-internal/commit/b8d57d30032a26fd3b034dcea00e24af4cc3be68))
+
 ## [3.5.4](https://github.com/launchdarkly/dotnet-sdk-internal/compare/3.5.3...3.5.4) (2025-08-22)
 
 
