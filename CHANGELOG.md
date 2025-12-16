@@ -2,6 +2,13 @@
 
 All notable changes to `LaunchDarkly.InternalSdk` will be documented in this file. For full release notes for the projects that depend on this project, see their respective changelogs. This file describes changes only to the common code. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [3.6.0](https://github.com/launchdarkly/dotnet-sdk-internal/compare/3.5.5...3.6.0) (2025-12-16)
+
+
+### Features
+
+* adds headers to UnsuccessfulResponseException ([#52](https://github.com/launchdarkly/dotnet-sdk-internal/issues/52)) ([3cca2ff](https://github.com/launchdarkly/dotnet-sdk-internal/commit/3cca2ff29e779def2fe75770dfdd13b94433742f))
+
 ## [3.5.5](https://github.com/launchdarkly/dotnet-sdk-internal/compare/3.5.4...3.5.5) (2025-09-26)
 
 
