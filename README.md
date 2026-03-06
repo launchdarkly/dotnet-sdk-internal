@@ -1,7 +1,6 @@
 # LaunchDarkly SDK .NET Internal Common Code
 
 [![NuGet](https://img.shields.io/nuget/v/LaunchDarkly.InternalSdk.svg?style=flat-square)](https://www.nuget.org/packages/LaunchDarkly.InternalSdk/)
-[![CircleCI](https://circleci.com/gh/launchdarkly/dotnet-sdk-internal.svg?style=shield)](https://circleci.com/gh/launchdarkly/dotnet-sdk-internal)
 
 This project contains .NET classes and interfaces that are shared between the LaunchDarkly .NET and Xamarin SDKs. These are internal implementation details that are not part of the supported SDK APIs and should not be used by application code. Code that is specific to one or the other SDK is in [dotnet-server-sdk](https://github.com/launchdarkly/dotnet-server-sdk) or [xamarin-client-sdk](https://github.com/launchdarkly/xamarin-client-sdk), and public APIs that are common to both are in [dotnet-sdk-common](https://github.com/launchdarkly/dotnet-sdk-common).
 
