@@ -8,6 +8,9 @@ on:
 jobs:
   release-please:
     runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+      pull-requests: write
 
     outputs:
       dotnet-sdk-internal-released: ${{ steps.release.outputs.release_created }}
