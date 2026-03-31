@@ -54,13 +54,7 @@ jobs:
           aws_role: ${{ vars.AWS_ROLE_ARN }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Generate checksums file
-        env:
-          HASHES: ${{ steps.full-release.outputs.hashes }}
-        run: |
-          echo "$HASHES" | base64 -d > checksums.txt
-
       - name: Attest build provenance
         uses: actions/attest@v4
         with:
-          subject-checksums: checksums.txt
+          subject-path: 'nupkgs/*'
