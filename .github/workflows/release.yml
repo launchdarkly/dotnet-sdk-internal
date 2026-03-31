@@ -13,6 +13,10 @@ on:
           - Default
           - Generate
           - Do not generate
+      publish_release:
+        description: 'Whether to publish (un-draft) a GitHub release after uploading artifacts.'
+        type: boolean
+        default: false
 
 jobs:
   build:
@@ -20,8 +24,7 @@ jobs:
     permissions:
       id-token: write
       contents: write
-    outputs:
-      full-release-hashes: ${{ steps.full-release.outputs.hashes }}
+      attestations: write
     steps:
       - uses: actions/checkout@v4
 
@@ -41,16 +44,32 @@ jobs:
           aws_role: ${{ vars.AWS_ROLE_ARN }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
-  release-provenance:
+      - name: Generate checksums file
+        if: |
+          (inputs.generate_provenance == 'Generate' || (inputs.generate_provenance == 'Default' && github.ref_name == 'main'))
+        env:
+          HASHES: ${{ steps.full-release.outputs.hashes }}
+        run: |
+          echo "$HASHES" | base64 -d > checksums.txt
+
+      - name: Attest build provenance
+        if: |
+          (inputs.generate_provenance == 'Generate' || (inputs.generate_provenance == 'Default' && github.ref_name == 'main'))
+        uses: actions/attest@v4
+        with:
+          subject-checksums: checksums.txt
+
+  publish-release:
     needs: ['build']
+    if: ${{ inputs.publish_release }}
+    runs-on: ubuntu-latest
     permissions:
-      actions: read
-      id-token: write
       contents: write
-    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
-    if: |
-      (inputs.generate_provenance == 'Generate' || (inputs.generate_provenance == 'Default' && github.ref_name == 'main'))
-    with:
-      base64-subjects: "${{ needs.build.outputs.full-release-hashes }}"
-      upload-assets: true
-      provenance-name: src/LaunchDarkly.InternalSdk_provenance.intoto.jsonl
+    steps:
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >
+          gh release edit "${{ github.ref_name }}"
+          --repo ${{ github.repository }}
+          --draft=false
