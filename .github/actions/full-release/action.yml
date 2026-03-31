@@ -25,11 +25,6 @@ inputs:
   token:
     description: 'The GitHub token to use for publishing documentation.'
     required: true
-outputs:
-  hashes:
-    description: sha256sum hashes of built artifacts
-    value: ${{ steps.publish.outputs.hashes }}
-
 runs:
   using: composite
   steps:
