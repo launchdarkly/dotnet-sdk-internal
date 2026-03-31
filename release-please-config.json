@@ -3,7 +3,6 @@
   "packages": {
     ".": {
       "release-type": "simple",
-      "force-tag-creation": true,
       "bump-minor-pre-major": true,
       "versioning": "default",
       "include-v-in-tag": false,
