@@ -8,7 +8,8 @@
       "include-v-in-tag": false,
       "include-component-in-tag": false,
       "extra-files": [
-        "src/LaunchDarkly.InternalSdk/LaunchDarkly.InternalSdk.csproj"
+        "src/LaunchDarkly.InternalSdk/LaunchDarkly.InternalSdk.csproj",
+        "PROVENANCE.md"
       ]
     }
   }
