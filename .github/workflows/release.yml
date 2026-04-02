@@ -53,7 +53,7 @@ jobs:
 
   publish-release:
     needs: ['build']
-    if: ${{ inputs.publish_release }}
+    if: ${{ format('{0}', inputs.publish_release) == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
