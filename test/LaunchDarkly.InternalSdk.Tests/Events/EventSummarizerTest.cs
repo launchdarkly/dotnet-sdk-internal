@@ -17,7 +17,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             es.SummarizeEvent(time2, "flag", null, null, LdValue.Null, LdValue.Null, _context);
             es.SummarizeEvent(time1, "flag", null, null, LdValue.Null, LdValue.Null, _context);
             es.SummarizeEvent(time3, "flag", null, null, LdValue.Null, LdValue.Null, _context);
-            EventSummary data = es.Snapshot();
+            EventSummary data = es.GetSummaryAndReset();
 
             Assert.Equal(time1, data.StartDate);
             Assert.Equal(time3, data.EndDate);
@@ -40,7 +40,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             es.SummarizeEvent(time, flag2Key, flag2Version, variation1, value99, default2, _context);
             es.SummarizeEvent(time, flag1Key, flag1Version, variation1, value1, default1, _context);
             es.SummarizeEvent(time, unknownFlagKey, null, null, default3, default3, _context);
-            EventSummary data = es.Snapshot();
+            EventSummary data = es.GetSummaryAndReset();
 
             Dictionary<EventsCounterKey, EventsCounterValue> expected = new Dictionary<EventsCounterKey, EventsCounterValue>();
             Assert.Equal(new EventsCounterValue(2, value1),
@@ -72,7 +72,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             es.SummarizeEvent(time, flag2Key, version, variation, value, value, c1);
             es.SummarizeEvent(time, flag2Key, version, variation, value, value, c2);
             es.SummarizeEvent(time, flag3Key, version, variation, value, value, multi);
-            EventSummary data = es.Snapshot();
+            EventSummary data = es.GetSummaryAndReset();
 
             Assert.Equal(new HashSet<string> { "kind1" }, data.Flags[flag1Key].ContextKinds);
             Assert.Equal(new HashSet<string> { "kind1", "kind2" }, data.Flags[flag2Key].ContextKinds);

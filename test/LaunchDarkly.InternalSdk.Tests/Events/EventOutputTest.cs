@@ -205,13 +205,16 @@ namespace LaunchDarkly.Sdk.Internal.Events
             summary.NoteTimestamp(UnixMillisecondTime.OfMillis(1002));
 
             var f = new EventOutputFormatter(new EventsConfiguration());
-            var outputEvent = TestUtil.TryParseJson(f.SerializeOutputEvents(new object[0], summary, out var count))
+            var outputEvent = TestUtil.TryParseJson(f.SerializeOutputEvents(new object[0], new[] { summary }, out var count))
                 .Get(0);
             Assert.Equal(1, count);
 
             Assert.Equal("summary", outputEvent.Get("kind").AsString);
             Assert.Equal(1000, outputEvent.Get("startDate").AsInt);
             Assert.Equal(1002, outputEvent.Get("endDate").AsInt);
+
+            // An aggregated summary (undefined context) does not include a context.
+            Assert.Equal(LdValue.Null, outputEvent.Get("context"));
 
             var featuresJson = outputEvent.Get("features");
             Assert.Equal(3, featuresJson.Count);
@@ -239,6 +242,23 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 thirdJson.Get("contextKinds")); // we evaluated this flag with only context2
             TestUtil.AssertContainsInAnyOrder(thirdJson.Get("counters").AsList(LdValue.Convert.Json),
                 LdValue.Parse(@"{""unknown"":true,""value"":""default3"",""count"":1}"));
+        }
+
+        [Fact]
+        public void PerContextSummaryEventIncludesTheContext()
+        {
+            var summary = new EventSummary(SimpleContext);
+            summary.NoteTimestamp(UnixMillisecondTime.OfMillis(1000));
+            summary.IncrementCounter("flag", 1, 11, LdValue.Of("value"), LdValue.Of("default"), SimpleContext);
+
+            var f = new EventOutputFormatter(new EventsConfiguration());
+            var outputEvent = TestUtil.TryParseJson(f.SerializeOutputEvents(new object[0], new[] { summary }, out var count))
+                .Get(0);
+
+            Assert.Equal(1, count);
+            Assert.Equal("summary", outputEvent.Get("kind").AsString);
+            Assert.Equal(LdValue.Parse(SimpleContextJson), outputEvent.Get("context"));
+            Assert.NotEqual(LdValue.Null, outputEvent.Get("features").Get("flag"));
         }
 
         [Fact]
@@ -731,8 +751,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
 
         private LdValue SerializeOneEvent(EventOutputFormatter f, object e)
         {
-            var emptySummary = new EventSummary();
-            var json = f.SerializeOutputEvents(new object[] {e}, emptySummary, out var count);
+            var json = f.SerializeOutputEvents(new object[] {e}, new EventSummary[0], out var count);
             var outputEvent = TestUtil.TryParseJson(json).Get(0);
             Assert.Equal(1, count);
             return outputEvent;
