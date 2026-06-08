@@ -102,23 +102,25 @@ namespace LaunchDarkly.Sdk.Internal.Events
         internal struct FlushPayload
         {
             internal object[] Events { get; set; }
-            internal EventSummary Summary { get; set; }
+            internal IReadOnlyList<EventSummary> Summaries { get; set; }
         }
 
         internal sealed class EventBuffer
         {
             private readonly List<object> _events;
-            private readonly EventSummarizer _summarizer;
+            private readonly IEventSummarizer _summarizer;
             private readonly IDiagnosticStore _diagnosticStore;
             private readonly int _capacity;
             private readonly Logger _logger;
             private bool _exceededCapacity;
 
-            internal EventBuffer(int capacity, IDiagnosticStore diagnosticStore, Logger logger)
+            internal EventBuffer(int capacity, bool perContextSummaries, IDiagnosticStore diagnosticStore, Logger logger)
             {
                 _capacity = capacity;
                 _events = new List<object>();
-                _summarizer = new EventSummarizer();
+                _summarizer = perContextSummaries
+                    ? (IEventSummarizer)new PerContextEventSummarizer()
+                    : new AggregatedEventSummarizer();
                 _diagnosticStore = diagnosticStore;
                 _logger = logger;
             }
@@ -146,7 +148,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                     ee.Context);
 
             internal FlushPayload GetPayload() =>
-                new FlushPayload { Events = _events.ToArray(), Summary = _summarizer.Snapshot() };
+                new FlushPayload { Events = _events.ToArray(), Summaries = _summarizer.GetSummariesAndReset() };
 
             internal void Clear()
             {
@@ -193,7 +195,8 @@ namespace LaunchDarkly.Sdk.Internal.Events
             _eventSender = eventSender;
             _logger = logger;
 
-            EventBuffer buffer = new EventBuffer(config.EventCapacity > 0 ? config.EventCapacity : 1, _diagnosticStore, _logger);
+            EventBuffer buffer = new EventBuffer(config.EventCapacity > 0 ? config.EventCapacity : 1,
+                config.PerContextSummaries, _diagnosticStore, _logger);
 
             // Here we use TaskFactory.StartNew instead of Task.Run() because that allows us to specify the
             // LongRunning option. This option tells the task scheduler that the task is likely to hang on
@@ -390,7 +393,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             {
                 _diagnosticStore.RecordEventsInBatch(payload.Events.Length);
             }
-            if (payload.Events.Length > 0 || !payload.Summary.Empty)
+            if (payload.Events.Length > 0 || payload.Summaries.Count > 0)
             {
                 lock (_flushWorkersCounter)
                 {
@@ -434,7 +437,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
             int eventCount;
             try
             {
-                jsonEvents = formatter.SerializeOutputEvents(payload.Events, payload.Summary, out eventCount);
+                jsonEvents = formatter.SerializeOutputEvents(payload.Events, payload.Summaries, out eventCount);
             }
             catch (Exception e)
             {

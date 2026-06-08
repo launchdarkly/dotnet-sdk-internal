@@ -41,5 +41,15 @@ namespace LaunchDarkly.Sdk.Internal.Events
         public IImmutableSet<AttributeRef> PrivateAttributes { get; set;  }
 
         public TimeSpan? RetryInterval { get; set; }
+
+        /// <summary>
+        /// True if the events system should emit a separate summary event for each evaluation
+        /// context, with the context attached, instead of a single aggregated summary.
+        /// </summary>
+        /// <remarks>
+        /// Client-side SDKs enable this. Server-side SDKs leave it at the default of false, which
+        /// preserves the original single aggregated summary behavior.
+        /// </remarks>
+        public bool PerContextSummaries { get; set; }
     }
 }

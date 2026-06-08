@@ -17,13 +17,13 @@ namespace LaunchDarkly.Sdk.Internal.Events
             _contextFormatter = new EventContextFormatter(config);
         }
 
-        public byte[] SerializeOutputEvents(object[] events, EventSummary summary, out int eventCountOut)
+        public byte[] SerializeOutputEvents(object[] events, IReadOnlyList<EventSummary> summaries, out int eventCountOut)
         {
             using (var stream = new MemoryStream())
             {
                 using (var jsonWriter = new Utf8JsonWriter(stream))
                 {
-                    eventCountOut = WriteOutputEvents(events, summary, jsonWriter);
+                    eventCountOut = WriteOutputEvents(events, summaries, jsonWriter);
                     jsonWriter.Flush();
                     return stream.ToArray();
                 }
@@ -39,7 +39,7 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 new MutableKeyValuePair<A, B> {Key = kv.Key, Value = kv.Value};
         }
 
-        public int WriteOutputEvents(object[] events, EventSummary summary, Utf8JsonWriter w)
+        public int WriteOutputEvents(object[] events, IReadOnlyList<EventSummary> summaries, Utf8JsonWriter w)
         {
             var eventCount = events.Length;
             w.WriteStartArray();
@@ -48,10 +48,13 @@ namespace LaunchDarkly.Sdk.Internal.Events
                 WriteOutputEvent(e, w);
             }
 
-            if (!summary.Empty)
+            foreach (var summary in summaries)
             {
-                WriteSummaryEvent(summary, w);
-                eventCount++;
+                if (!summary.Empty)
+                {
+                    WriteSummaryEvent(summary, w);
+                    eventCount++;
+                }
             }
 
             w.WriteEndArray();
@@ -122,6 +125,13 @@ namespace LaunchDarkly.Sdk.Internal.Events
             w.WriteString("kind", "summary");
             w.WriteNumber("startDate", summary.StartDate.Value);
             w.WriteNumber("endDate", summary.EndDate.Value);
+
+            // Per-context summaries carry the evaluation context; aggregated summaries leave it
+            // undefined and omit it. The context is filtered the same way as for other events.
+            if (summary.Context.Defined)
+            {
+                WriteContext(summary.Context, w, redactAnonymous: true);
+            }
 
             w.WriteStartObject("features");
 

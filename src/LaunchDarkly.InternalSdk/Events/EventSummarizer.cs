@@ -2,13 +2,21 @@
 
 namespace LaunchDarkly.Sdk.Internal.Events
 {
+    // Accumulates summary counters for a single context. The aggregated and per-context
+    // summarizers are both built on top of this. For the aggregated case the context is
+    // undefined and is not included in the output; for the per-context case each instance
+    // owns the context whose evaluations it summarizes.
     internal sealed class EventSummarizer
     {
+        private readonly Context _context;
         private EventSummary _eventsState;
 
-        public EventSummarizer()
+        public EventSummarizer() : this(default) { }
+
+        public EventSummarizer(Context context)
         {
-            _eventsState = new EventSummary();
+            _context = context;
+            _eventsState = new EventSummary(context);
         }
 
         // Adds this event to our counters, if it is a type of event we need to count.
@@ -26,17 +34,19 @@ namespace LaunchDarkly.Sdk.Internal.Events
             _eventsState.NoteTimestamp(timestamp);
         }
 
-        // Returns the current summarized event data.
-        public EventSummary Snapshot()
+        public bool Empty => _eventsState.Empty;
+
+        // Returns the current summarized event data and resets the state to empty.
+        public EventSummary GetSummaryAndReset()
         {
             EventSummary ret = _eventsState;
-            _eventsState = new EventSummary();
+            _eventsState = new EventSummary(_context);
             return ret;
         }
 
         public void Clear()
         {
-            _eventsState = new EventSummary();
+            _eventsState = new EventSummary(_context);
         }
     }
 
@@ -45,10 +55,21 @@ namespace LaunchDarkly.Sdk.Internal.Events
         public readonly Dictionary<string, FlagSummary> Flags =
             new Dictionary<string, FlagSummary>();
 
+        // The context whose evaluations this summary describes, or an undefined context for an
+        // aggregated summary. When defined, it is serialized onto the summary event.
+        public Context Context { get; }
+
         public UnixMillisecondTime StartDate { get; private set; }
         public UnixMillisecondTime EndDate { get; private set; }
 
         public bool Empty => Flags.Count == 0;
+
+        public EventSummary() { }
+
+        public EventSummary(Context context)
+        {
+            Context = context;
+        }
 
         public void IncrementCounter(string key, int? variation, int? version, LdValue flagValue, LdValue defaultVal, in Context context)
         {
