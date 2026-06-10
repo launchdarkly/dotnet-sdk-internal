@@ -2,6 +2,13 @@
 
 All notable changes to `LaunchDarkly.InternalSdk` will be documented in this file. For full release notes for the projects that depend on this project, see their respective changelogs. This file describes changes only to the common code. This project adheres to [Semantic Versioning](http://semver.org).
 
+## [3.7.0](https://github.com/launchdarkly/dotnet-sdk-internal/compare/3.6.1...3.7.0) (2026-06-08)
+
+
+### Features
+
+* add optional support for per-context summary events ([#65](https://github.com/launchdarkly/dotnet-sdk-internal/issues/65)) ([d835d08](https://github.com/launchdarkly/dotnet-sdk-internal/commit/d835d08d062d6d71acebc6b572d112eed976a508))
+
 ## [3.6.1](https://github.com/launchdarkly/dotnet-sdk-internal/compare/3.6.0...3.6.1) (2026-04-09)
 
 
