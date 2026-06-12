@@ -15,8 +15,7 @@ jobs:
     strategy:
       matrix:
         framework:
-          - { target: 'netcoreapp3.1', image: 'sdk:3.1-focal' }
-          - { target: 'net6.0', image: 'sdk:6.0-focal' }
+          - { target: 'net8.0', image: 'sdk:8.0' }
     runs-on: ubuntu-latest
     container: mcr.microsoft.com/dotnet/${{ matrix.framework.image }}
     env:

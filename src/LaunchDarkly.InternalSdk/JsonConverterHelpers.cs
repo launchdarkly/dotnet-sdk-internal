@@ -241,7 +241,7 @@ namespace LaunchDarkly.Sdk.Internal
         /// </summary>
         /// <seealso cref="RequireArray(ref Utf8JsonReader)"/>
         /// <seealso cref="RequireArrayOrNull(ref Utf8JsonReader)"/>
-        public ref struct ArrayHelper
+        public struct ArrayHelper
         {
             private readonly bool _empty;
 
@@ -285,7 +285,7 @@ namespace LaunchDarkly.Sdk.Internal
         /// </code></example>
         /// <seealso cref="RequireObject(ref Utf8JsonReader)"/>
         /// <seealso cref="RequireObjectOrNull(ref Utf8JsonReader)"/>
-        public ref struct ObjectHelper
+        public struct ObjectHelper
         {
             private readonly bool _defined;
             private readonly string[] _requiredPropertyNames;
