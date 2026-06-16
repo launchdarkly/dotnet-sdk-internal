@@ -1,9 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TestFramework Condition="'$(TESTFRAMEWORK)' == ''">netcoreapp3.1;net462;net6.0</TestFramework>
+    <TestFramework Condition="'$(TESTFRAMEWORK)' == ''">net462;net8.0</TestFramework>
     <TargetFrameworks>$(TESTFRAMEWORK)</TargetFrameworks>
     <AssemblyName>LaunchDarkly.InternalSdk.Tests</AssemblyName>
     <RootNamespace>LaunchDarkly.Sdk.Internal</RootNamespace>
+    <!-- Match the library's C# 11, needed for the 'scoped' ref-safety annotations. -->
+    <LangVersion>11</LangVersion>
     <Version>1.2.3</Version> <!-- we check for this value in tests -->
     <ReleaseVersion>1.2.3</ReleaseVersion>
     <SynchReleaseVersion>false</SynchReleaseVersion>

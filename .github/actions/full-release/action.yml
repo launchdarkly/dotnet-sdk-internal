@@ -31,7 +31,7 @@ runs:
     - name: CI check
       uses: ./.github/actions/ci
       with:
-        framework_target: "net6.0"
+        framework_target: "net8.0"
 
     - uses: launchdarkly/gh-actions/actions/release-secrets@release-secrets-v1.2.0
       name: Get secrets

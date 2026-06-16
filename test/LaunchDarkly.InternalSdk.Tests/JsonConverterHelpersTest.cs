@@ -184,7 +184,7 @@ namespace LaunchDarkly.Sdk.Internal
             VerifyNonEmptyArray(ref r2, ref a2);
         }
 
-        private void VerifyNonEmptyArray(ref Utf8JsonReader r, ref ArrayHelper a)
+        private void VerifyNonEmptyArray(scoped ref Utf8JsonReader r, ref ArrayHelper a)
         {
             Assert.True(a.Next(ref r));
             Assert.Equal(10, r.GetInt32());
@@ -207,7 +207,7 @@ namespace LaunchDarkly.Sdk.Internal
             VerifyEmptyArray(ref r2, ref a2);
         }
 
-        private void VerifyEmptyArray(ref Utf8JsonReader r, ref ArrayHelper a) =>
+        private void VerifyEmptyArray(scoped ref Utf8JsonReader r, ref ArrayHelper a) =>
             Assert.False(a.Next(ref r));
 
         [Fact]
@@ -242,7 +242,7 @@ namespace LaunchDarkly.Sdk.Internal
             VerifyNonEmptyObject(ref r2, ref o2);
         }
 
-        private void VerifyNonEmptyObject(ref Utf8JsonReader r, ref ObjectHelper o)
+        private void VerifyNonEmptyObject(scoped ref Utf8JsonReader r, ref ObjectHelper o)
         {
             Assert.True(o.Next(ref r));
             Assert.Equal("a", o.Name);
@@ -267,7 +267,7 @@ namespace LaunchDarkly.Sdk.Internal
             VerifyEmptyObject(ref r2, ref o2);
         }
 
-        private void VerifyEmptyObject(ref Utf8JsonReader r, ref ObjectHelper o) =>
+        private void VerifyEmptyObject(scoped ref Utf8JsonReader r, ref ObjectHelper o) =>
             Assert.False(o.Next(ref r));
 
         [Fact]

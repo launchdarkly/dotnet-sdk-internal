@@ -185,7 +185,7 @@ namespace LaunchDarkly.Sdk.Internal
         /// <param name="reader">the JSON reader</param>
         /// <returns>an <see cref="ArrayHelper"/></returns>
         /// <exception cref="JsonException">if the next token is not the beginning of an array</exception>
-        public static ArrayHelper RequireArray(ref Utf8JsonReader reader) =>
+        public static ArrayHelper RequireArray(scoped ref Utf8JsonReader reader) =>
             new ArrayHelper(ref reader, false);
 
         /// <summary>
@@ -195,7 +195,7 @@ namespace LaunchDarkly.Sdk.Internal
         /// <param name="reader">the JSON reader</param>
         /// <returns>an <see cref="ArrayHelper"/></returns>
         /// <exception cref="JsonException">if the next token is not the beginning of an array or null</exception>
-        public static ArrayHelper RequireArrayOrNull(ref Utf8JsonReader reader) =>
+        public static ArrayHelper RequireArrayOrNull(scoped ref Utf8JsonReader reader) =>
             new ArrayHelper(ref reader, true);
 
         /// <summary>
@@ -205,7 +205,7 @@ namespace LaunchDarkly.Sdk.Internal
         /// <param name="reader">the JSON reader</param>
         /// <returns>an <see cref="ObjectHelper"/></returns>
         /// <exception cref="JsonException">if the next token is not the beginning of an object</exception>
-        public static ObjectHelper RequireObject(ref Utf8JsonReader reader)
+        public static ObjectHelper RequireObject(scoped ref Utf8JsonReader reader)
         {
             if (reader.TokenType == JsonTokenType.None)
             {
@@ -222,7 +222,7 @@ namespace LaunchDarkly.Sdk.Internal
         /// <param name="reader">the JSON reader</param>
         /// <returns>an <see cref="ObjectHelper"/></returns>
         /// <exception cref="JsonException">if the next token is not the beginning of an object or null</exception>
-        public static ObjectHelper RequireObjectOrNull(ref Utf8JsonReader reader)
+        public static ObjectHelper RequireObjectOrNull(scoped ref Utf8JsonReader reader)
         {
             if (reader.TokenType == JsonTokenType.None)
             {
@@ -245,7 +245,7 @@ namespace LaunchDarkly.Sdk.Internal
         {
             private readonly bool _empty;
 
-            internal ArrayHelper(ref Utf8JsonReader reader, bool allowNull)
+            internal ArrayHelper(scoped ref Utf8JsonReader reader, bool allowNull)
             {
                 if (reader.TokenType == JsonTokenType.None)
                 {
@@ -268,7 +268,7 @@ namespace LaunchDarkly.Sdk.Internal
             /// </summary>
             /// <param name="reader">the JSON reader (this must be passed again due to ref struct rules)</param>
             /// <returns>true if there is an element, false if this is the end</returns>
-            public bool Next(ref Utf8JsonReader reader) =>
+            public bool Next(scoped ref Utf8JsonReader reader) =>
                 !_empty && reader.Read() && reader.TokenType != JsonTokenType.EndArray;
         }
 
@@ -360,7 +360,7 @@ namespace LaunchDarkly.Sdk.Internal
             /// </summary>
             /// <param name="reader">the JSON reader (this must be passed again due to ref struct rules)</param>
             /// <returns>true if there is a property, false if this is the end</returns>
-            public bool Next(ref Utf8JsonReader reader)
+            public bool Next(scoped ref Utf8JsonReader reader)
             {
                 if (!_defined)
                 {
